@@ -1,9 +1,5 @@
 # CookCoach
 COMP5140 group project
-# CookCoach
-
-COMP5140 小组项目。用户在 Unity 虚拟厨房练习番茄炒蛋，
-导师根据当前步骤、操作错误和追问提供指导，并可高亮相关道具。
 
 ## 开发环境
 
