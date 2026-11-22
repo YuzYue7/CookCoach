@@ -1,0 +1,37 @@
+#hud { position:absolute; left:0; top:0; right:0; bottom:0; color:#223d36; font-size:16px; }
+.horizontal { flex-direction:row; align-items:center; }
+Button { margin:0; padding:0; border-width:0; background-image:none; -unity-text-align:middle-center; }
+Label { margin:0; padding:0; }
+.dark { background-color:rgba(28,53,46,0.96); color:#fff7dc; border-radius:14px; }
+#progress { position:absolute; top:22px; left:24px; min-width:198px; padding:12px 16px; border-left-width:3px; border-left-color:#edbc72; }
+.recipe { font-size:21px; -unity-font-style:bold; color:#fff4d8; }
+#count { margin-left:auto; padding-left:17px; font-size:14px; color:#e8cfa6; }
+.progressLine { margin-top:4px; }
+#step { font-size:14px; color:#e3e8d9; } #ticks { margin-left:auto; padding-left:10px; }
+.tick { width:13px; height:4px; background-color:#63796b; border-radius:4px; margin-left:3px; }
+.tick.done { background-color:#e5c58e; } .tick.active { background-color:#ffab77; }
+.topButton,.expand {position:absolute; padding:8px 14px; font-size:14px; border-width:1px; border-color:#88958a;}
+.topButton {top:22px; right:24px;} .expand {bottom:22px;left:24px;}
+.topButton:hover,.expand:hover {background-color:#38574b;}
+#card {position:absolute;bottom:22px;left:24px;width:366px;max-width:54%;padding:15px 18px 14px;background-color:#fff6e5;border-width:1px;border-color:#c4b59c;border-top-width:3px;border-top-color:#bd5a3d;border-radius:16px;}
+.head {padding-bottom:9px;border-bottom-width:1px;border-bottom-color:#dfd3bc;}
+#emblem {width:44px;height:44px;background-color:#e7ecd9;border-radius:22px;margin-right:11px;flex-shrink:0;}
+.title {font-size:21px;color:#203e33;-unity-font-style:bold;} .origin {font-size:12px;color:#586b5c;}
+.fold,.logClose {margin-left:auto;background-color:rgba(0,0,0,0);color:#395345;width:30px;height:30px;font-size:22px;border-radius:15px;}
+.fold:hover {background-color:#e9ddc8;}
+.body {font-size:20px;color:#273e33;white-space:normal;margin-top:10px;min-height:45px;}
+.suggestions {margin-top:6px;margin-bottom:11px;}
+.chip {border-width:1px;border-color:#c8ccb8;border-radius:11px;background-color:#edf0e0;padding:3px 9px;color:#335744;font-size:13px;margin-right:6px;}
+.chip:hover {background-color:#dae7cf;} .chip:disabled {opacity:.48;}
+.compose {height:36px;} #question {flex-grow:1;min-width:0;margin:0;margin-right:7px;}
+#question .unity-text-field__input {height:36px;margin:0;padding-left:10px;background-color:#fffaf0;color:#273e33;border-width:1px;border-color:#b7bba7;border-radius:7px;font-size:15px;}
+.primary {height:36px;width:56px;background-color:#a94732;color:#fffaf0;border-radius:8px;font-size:15px;}
+.primary:hover {background-color:#873a29;} .primary:disabled {opacity:.5;}
+#beacon {position:absolute;flex-direction:row;align-items:center;} #ring {width:26px;height:26px;border-width:3px;border-color:#ffcf79;border-radius:13px;background-color:rgba(60,44,20,.4);}
+#targetName {color:#fff5d5;font-size:15px;margin-left:7px;background-color:#304a3e;border-radius:7px;padding:4px 9px;}
+#log {position:absolute;right:24px;top:69px;width:438px;max-width:55%;max-height:64%;padding:16px;}
+.logTitle {font-size:18px;-unity-font-style:bold;} .logClose {color:#fff4df;}
+#scroll {margin-top:8px;flex-shrink:1;} #trace {white-space:normal;color:#eee5cf;font-size:14px;}
+#lessonAction {position:absolute;bottom:24px;right:24px;background-color:#253e33;color:#fff7dd;border-width:1px;border-color:#a9b49b;border-radius:20px;padding:8px 16px;font-size:17px;}
+#lessonAction:hover {background-color:#42604c;}
+

@@ -11,7 +11,7 @@ COMP5140 group project
 ## 本地启动
 
 1. 克隆仓库，在 Unity Hub 中打开 `unity/`。
-2. 打开主场景并点击 Play。若沿用开题 Demo，场景是 `Assets/Scenes/CookCoach.unity`。
+2. 本分支打开 `Assets/Scenes/KitchenTutorPractice.unity` 并点击 Play。场景引用 `modern_kitchen.prefab`，在组员制作的现代厨房中练习放锅和点火。
 3. 后端接通后，按 `backend/README.md` 启动 FastAPI。
    环境变量名称见 `backend/.env.example`，实际密钥由开发者在本地配置。
 4. `/health` 用于检查后端服务。真实模型是否可用，通过一次指导请求确认。

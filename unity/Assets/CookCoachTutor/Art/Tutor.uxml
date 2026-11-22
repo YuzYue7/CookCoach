@@ -1,0 +1,18 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+ <ui:VisualElement name="hud" picking-mode="Ignore">
+  <ui:VisualElement name="progress" class="dark" picking-mode="Ignore">
+   <ui:VisualElement class="horizontal"><ui:Label name="recipe" text="番茄炒蛋" class="recipe"/><ui:Label name="count" class="muted"/></ui:VisualElement>
+   <ui:VisualElement class="horizontal progressLine"><ui:Label name="step" text="准备练习"/><ui:VisualElement name="ticks" class="horizontal"/></ui:VisualElement>
+  </ui:VisualElement>
+  <ui:Button name="logButton" text="交互记录" class="dark topButton"/>
+  <ui:VisualElement name="beacon" picking-mode="Ignore"><ui:VisualElement name="ring" picking-mode="Ignore"/><ui:Label name="targetName" picking-mode="Ignore"/></ui:VisualElement>
+  <ui:VisualElement name="card">
+   <ui:VisualElement class="horizontal head"><ui:VisualElement name="emblem" picking-mode="Ignore"/><ui:VisualElement class="byline"><ui:Label text="厨房导师" class="title"/><ui:Label name="origin" text="本地演示" class="origin"/></ui:VisualElement><ui:Button name="fold" text="−" tooltip="收起导师" class="fold"/></ui:VisualElement>
+   <ui:Label name="hint" class="body" text="把平底锅放到炉架上，我们就开始。"/>
+   <ui:VisualElement class="horizontal suggestions"><ui:Button name="tip" text="下一步怎么做" class="chip"/><ui:Button name="locate" text="开关在哪里" class="chip"/><ui:Button name="retry" text="重试" class="chip"/></ui:VisualElement>
+   <ui:VisualElement class="horizontal compose"><ui:TextField name="question" max-length="240" tooltip="输入问题"/><ui:Button name="send" text="发送" class="primary"/></ui:VisualElement>
+  </ui:VisualElement>
+  <ui:Button name="expand" text="厨房导师" class="dark expand"/>
+  <ui:VisualElement name="log" class="dark"><ui:VisualElement class="horizontal"><ui:Label text="本轮交互记录" class="logTitle"/><ui:Button name="closeLog" text="×" class="logClose"/></ui:VisualElement><ui:ScrollView name="scroll"><ui:Label name="trace"/></ui:ScrollView></ui:VisualElement>
+ </ui:VisualElement>
+</ui:UXML>

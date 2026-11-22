@@ -1,0 +1,271 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.UIElements;
+
+namespace CookCoach.Tutoring
+{
+    [RequireComponent(typeof(UIDocument))]
+    public sealed class KitchenTutor : MonoBehaviour
+    {
+        public TutorMode mode = TutorMode.LocalPreview;
+        public string endpoint = "http://127.0.0.1:8000/api/v1/guidance";
+        public StyleSheet stylesheet;
+        public bool startExpanded = true;
+        public bool IsWaiting { get; private set; }
+        public string ActiveHighlight { get; private set; } = "";
+        public string LastMessage => message.text;
+        public event Action<string> HighlightChanged;
+
+        VisualElement root, card, marker, log, ticks;
+        Label message, source, trace, targetName;
+        TextField question;
+        Button send, tip, locate, retry;
+        readonly Dictionary<string, (Transform anchor, string title)> targets = new();
+        readonly List<TutorTurn> history = new();
+        readonly Queue<string> records = new();
+        KitchenContext context;
+        Coroutine pending;
+        UnityWebRequest http;
+        string latestId, lastQuestion, lastTrigger;
+        bool expanded;
+        Font uiFont;
+        static void Show(VisualElement element, bool on) =>
+            element.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
+
+        void Start()
+        {
+            root = GetComponent<UIDocument>().rootVisualElement;
+            root.pickingMode = PickingMode.Ignore;
+            if (stylesheet != null) root.styleSheets.Add(stylesheet);
+            uiFont = Font.CreateDynamicFontFromOSFont(new[] {"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Arial"}, 18);
+            if (uiFont != null) {
+                root.style.unityFontDefinition = FontDefinition.FromFont(uiFont);
+                root.style.unityFont = uiFont;
+            }
+            card=root.Q("card"); marker=root.Q("beacon"); ticks=root.Q("ticks"); log=root.Q("log");
+            message=root.Q<Label>("hint"); source=root.Q<Label>("origin"); trace=root.Q<Label>("trace");
+            targetName=root.Q<Label>("targetName"); question=root.Q<TextField>("question");
+            #if UNITY_6000_0_OR_NEWER
+            question.textEdition.placeholder="问问导师…";
+#else
+            question.label="提问";
+#endif
+            send=root.Q<Button>("send"); tip=root.Q<Button>("tip"); locate=root.Q<Button>("locate"); retry=root.Q<Button>("retry");
+            send.clicked += () => { if(IsWaiting) Cancel(); else SubmitTyped(); };
+            tip.clicked += () => Ask("hint","");
+            locate.clicked += () => Ask("question","开关在哪里？");
+            retry.clicked += () => Ask(lastTrigger,lastQuestion);
+            question.RegisterCallback<KeyDownEvent>(e => {
+                if(e.keyCode==KeyCode.Return && !IsWaiting && !ComposingText()) {
+                    SubmitTyped(); e.StopPropagation();
+                }
+            });
+            root.Q<Button>("fold").clicked+=()=>SetExpanded(false);
+            root.Q<Button>("expand").clicked+=()=>SetExpanded(true);
+            root.Q<Button>("logButton").clicked+=()=>Show(log,log.resolvedStyle.display==DisplayStyle.None);
+            root.Q<Button>("closeLog").clicked+=()=>Show(log,false);
+            root.Q("emblem").generateVisualContent+=DrawEmblem;
+            SetExpanded(startExpanded); Show(marker,false); Show(log,false); Show(retry,false);
+            RefreshContextView();
+            if(context==null) message.text="等待厨房开始练习。";
+            else message.text="食材准备好了。需要帮助时，可以给我提示或直接提问。";
+            RenderTrace();
+        }
+
+        static void DrawEmblem(MeshGenerationContext g)
+        {
+            var pen = g.painter2D;
+            Color ink = new Color32(43, 65, 51, 255);
+            void Disc(float x, float y, float radius, Color color) {
+                pen.fillColor=color; pen.BeginPath(); pen.Arc(new Vector2(x,y), radius, 0f, 360f); pen.Fill();
+            }
+            Disc(22,22,21,new Color32(217,229,203,255));
+            Disc(22,40,12,new Color32(170,78,52,255));
+            Disc(22,23,12,ink);
+            Disc(22,24,10.5f,new Color32(240,193,146,255));
+            pen.lineWidth=1.3f; pen.strokeColor=ink;
+            Disc(18,24,1.1f,ink); Disc(26,24,1.1f,ink);
+            pen.BeginPath(); pen.MoveTo(new Vector2(19,28)); pen.QuadraticCurveTo(new Vector2(22,31),new Vector2(25,28)); pen.Stroke();
+            pen.fillColor=new Color32(255,251,234,255);
+            pen.BeginPath(); pen.MoveTo(new Vector2(12,18)); pen.LineTo(new Vector2(11,13));
+            pen.QuadraticCurveTo(new Vector2(5,6), new Vector2(15,6));
+            pen.QuadraticCurveTo(new Vector2(21,-2), new Vector2(27,5));
+            pen.QuadraticCurveTo(new Vector2(39,3), new Vector2(33,14));
+            pen.LineTo(new Vector2(32,18)); pen.ClosePath(); pen.Fill(); pen.Stroke();
+            pen.BeginPath(); pen.MoveTo(new Vector2(13,15)); pen.LineTo(new Vector2(31,15)); pen.Stroke();
+        }
+
+        public void SetExpanded(bool value)
+        {
+            expanded=value;
+            if(card!=null){Show(card,value);Show(root.Q("expand"),!value);}
+        }
+
+        // The kitchen owns session and state versions. Send the latest snapshot after each action.
+        public void SetContext(KitchenContext next)
+        {
+            if(next==null || next.snapshot==null || string.IsNullOrWhiteSpace(next.session_id))
+                throw new ArgumentException("A kitchen session and snapshot are required.");
+            bool fresh=context==null || context.session_id!=next.session_id;
+            bool changed=fresh || context.state_version!=next.state_version;
+            if(changed) {
+                StopPending(); SetHighlight("");
+                if(fresh){history.Clear();records.Clear();}
+                if(message!=null) {
+                    message.text=fresh?"练习已开始。需要帮助时，可以问我。":"操作已更新。可以询问下一步。";
+                    question.SetValueWithoutNotify(""); Show(retry,false);
+                    if(fresh) SetExpanded(startExpanded);
+                }
+            }
+            // Copy at the boundary so a caller mutating its snapshot cannot change an in-flight request.
+            context=JsonUtility.FromJson<KitchenContext>(JsonUtility.ToJson(next));
+            RefreshContextView(); RenderTrace();
+        }
+
+        void RefreshContextView()
+        {
+            if(card==null) return;
+            source.text=mode==TutorMode.LocalPreview?"本地模拟":"后端服务";
+            if(context!=null){
+                root.Q<Label>("recipe").text=context.recipe_title;
+                root.Q<Label>("step").text=context.snapshot.current_step_title;
+                int total=Mathf.Clamp(context.snapshot.step_count,1,12);
+                int n=Mathf.Clamp(context.snapshot.step_number,1,total);
+                root.Q<Label>("count").text=n+" / "+total;
+                ticks.Clear();
+                for(int i=1;i<=total;i++){var t=new VisualElement();t.AddToClassList("tick");if(context.snapshot.current_step=="done" || i<n)t.AddToClassList("done");else if(i==n)t.AddToClassList("active");ticks.Add(t);}
+            }
+            SetBusy(IsWaiting);
+        }
+        // Scene rules can give immediate feedback even when the network coach is offline.
+        public void ShowSceneCue(string text, string target = "", bool reveal = true)
+        {
+            if (message == null) return;
+            StopPending();
+            if (reveal) SetExpanded(true);
+            message.text = text;
+            source.text = "练习提示";
+            Show(retry, false);
+            SetHighlight(target);
+            AddRecord("练习  " + text);
+        }
+
+        public void RegisterTarget(string id, Transform anchor, string label)
+        {
+            if(string.IsNullOrWhiteSpace(id)||anchor==null) throw new ArgumentException("Target id and anchor are required.");
+            targets[id]=(anchor,label);
+        }
+        public void UnregisterTarget(string id) { targets.Remove(id); if(ActiveHighlight==id) SetHighlight(""); }
+        void SetHighlight(string id)
+        {
+            if(string.IsNullOrEmpty(id)||!targets.TryGetValue(id,out var entry)||entry.anchor==null) id="";
+            ActiveHighlight=id;
+            if(marker!=null) Show(marker,false);
+            HighlightChanged?.Invoke(id);
+        }
+        void LateUpdate()
+        {
+            if(marker==null || ActiveHighlight=="") return;
+            if(!targets.TryGetValue(ActiveHighlight,out var t)||t.anchor==null){SetHighlight("");return;}
+            var cam=Camera.main;
+            if(cam==null || root.panel==null){Show(marker,false);return;}
+            var vp=cam.WorldToViewportPoint(t.anchor.position);
+            bool visible=vp.z>0 && vp.x>=0 && vp.x<=1 && vp.y>=0 && vp.y<=1;
+            Show(marker,visible);
+            if(!visible) return;
+            var coord=RuntimePanelUtils.CameraTransformWorldToPanel(root.panel,t.anchor.position,cam);
+            targetName.text=t.title; marker.style.left=coord.x-13;marker.style.top=coord.y-13;
+        }
+
+        void SubmitTyped(){var text=question.value?.Trim(); if(string.IsNullOrEmpty(text)) {question.Focus();return;} Ask("question",text);}
+        static bool ComposingText()
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return !string.IsNullOrEmpty(Input.compositionString);
+#else
+            return false;
+#endif
+        }
+        public void Ask(string trigger,string text)
+        {
+            if(context==null || card==null || IsWaiting) return;
+            SetExpanded(true);Show(retry,false);SetHighlight("");
+            lastTrigger=trigger;lastQuestion=text??"";
+            latestId=Guid.NewGuid().ToString("N");
+            var ids=new List<string>(); foreach(var kv in targets) if(kv.Value.anchor!=null)ids.Add(kv.Key);
+            var request=new TutorRequest{request_id=latestId,session_id=context.session_id,
+                recipe_id=context.recipe_id,recipe_version=context.recipe_version,state_version=context.state_version,
+                trigger=trigger,user_question=lastQuestion,snapshot=context.snapshot,recent_events=context.recent_events,
+                conversation=history.ToArray(),allowed_highlight_targets=ids.ToArray()};
+            var payload=JsonUtility.ToJson(request);
+            AddRecord("请求  "+payload);
+            message.text="导师正在思考…"; SetBusy(true);
+            pending=StartCoroutine(Receive(request,payload));
+        }
+
+        IEnumerator Receive(TutorRequest req,string payload)
+        {
+            TutorReply reply=null;
+            if(mode==TutorMode.LocalPreview)
+                yield return TutorTransport.Preview(req,value=>reply=value);
+            else {
+                string failure=null;
+                UnityWebRequestAsyncOperation op=null;
+                try {http=TutorTransport.CreateHttp(endpoint,payload);op=http.SendWebRequest();}
+                catch(Exception e){failure=e.Message;}
+                if(op!=null) yield return op;
+                if(failure==null && http.result!=UnityWebRequest.Result.Success) failure=http.error;
+                if(failure==null) {
+                    try{reply=JsonUtility.FromJson<TutorReply>(http.downloadHandler.text);}
+                    catch(Exception e){failure=e.Message;}
+                }
+                ReleaseHttp();
+                if(failure!=null){Fail("导师连接失败，请重试。",failure);yield break;}
+            }
+            if(req.request_id!=latestId || req.session_id!=context.session_id || req.state_version!=context.state_version) yield break;
+            if(reply==null || reply.request_id!=latestId || reply.session_id!=req.session_id ||
+                reply.state_version!=req.state_version || string.IsNullOrWhiteSpace(reply.source) ||
+                reply.guidance==null || string.IsNullOrWhiteSpace(reply.guidance.message)){
+                Fail("回复与本轮练习不匹配，请重试。","回复编号、状态版本或内容无效");yield break;
+            }
+            SetBusy(false); pending=null;
+            message.text=reply.guidance.message;
+            source.text=mode==TutorMode.LocalPreview?"本地模拟":reply.source=="fallback"?"备用提示":"后端 · "+reply.source;
+            SetHighlight(reply.guidance.highlight_target_id);
+            string result=ActiveHighlight!=""?"已标记 "+ActiveHighlight:
+                !string.IsNullOrEmpty(reply.guidance.highlight_target_id)?"目标未注册，已忽略":"无需高亮";
+            AddRecord("回复  "+JsonUtility.ToJson(reply)+"\n场景执行  "+result);
+            history.Add(new TutorTurn("user",string.IsNullOrEmpty(req.user_question)?"给我提示":req.user_question));
+            history.Add(new TutorTurn("assistant",message.text));
+            if(history.Count>6)history.RemoveRange(0,history.Count-6);
+            question.SetValueWithoutNotify("");
+        }
+        void SetBusy(bool busy)
+        {
+            IsWaiting=busy;if(card==null)return;
+            send.text=busy?"取消":"发送";send.SetEnabled(context!=null);
+            question.SetEnabled(!busy && context!=null);tip.SetEnabled(!busy && context!=null);
+            locate.SetEnabled(!busy && context!=null && !context.snapshot.stove_on && targets.ContainsKey("stove_switch") && context.snapshot.current_step!="place_pan");
+        }
+        void Fail(string msg,string detail)
+        {
+            pending=null;SetBusy(false);message.text=msg;Show(retry,true);AddRecord("失败  "+detail);
+        }
+        void AddRecord(string line){records.Enqueue(line);while(records.Count>8)records.Dequeue();RenderTrace();}
+        void RenderTrace(){if(trace!=null)trace.text=records.Count==0?"本轮还没有请求。":string.Join("\n\n",records);}
+        void ReleaseHttp(){if(http!=null){http.Dispose();http=null;}}
+        void StopPending()
+        {
+            latestId=null;if(pending!=null){StopCoroutine(pending);pending=null;}
+            if(http!=null){http.Abort();ReleaseHttp();}
+            SetBusy(false);
+        }
+        public void Cancel(){if(!IsWaiting)return; StopPending();message.text="已取消，可以重新提问。";AddRecord("本次请求已取消");}
+        void OnDisable(){StopPending();}
+        void OnDestroy(){if(uiFont!=null) Destroy(uiFont);}
+    }
+}
