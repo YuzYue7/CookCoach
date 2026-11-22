@@ -35,3 +35,15 @@ Label { margin:0; padding:0; }
 #lessonAction {position:absolute;bottom:24px;right:24px;background-color:#253e33;color:#fff7dd;border-width:1px;border-color:#a9b49b;border-radius:20px;padding:8px 16px;font-size:17px;}
 #lessonAction:hover {background-color:#42604c;}
 
+
+#reviewButton { right:122px; }
+#reviewPanel {position:absolute;right:24px;top:70px;width:365px;max-width:60%;max-height:61%;padding:16px;}
+#reviewScroll {margin-top:10px;margin-bottom:12px;flex-shrink:1;}
+#reviewText,#exportStatus {white-space:normal;color:#fff3d9;font-size:15px;}
+#export {margin-top:8px;align-self:flex-start;}
+#exportStatus {font-size:12px;}
+#rehearsal {position:absolute;bottom:22px;right:24px;width:258px;max-width:40%;padding:11px 14px;}
+#rehearsalActions {flex-direction:row;flex-wrap:wrap;}
+#rehearsal .chip {margin-top:5px;}
+#rehearsalTitle {font-size:14px;color:#f2d7a4;}
+#switchPractice {position:absolute;top:22px;left:240px;}

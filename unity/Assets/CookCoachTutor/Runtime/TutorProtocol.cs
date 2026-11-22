@@ -13,7 +13,7 @@ namespace CookCoach.Tutoring
 
     [Serializable] public class KitchenEvent
     {
-        public string action_id, outcome, reason;
+        public string action_id, target_id, outcome, reason;
     }
 
     [Serializable] public class TutorTurn

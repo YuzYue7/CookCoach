@@ -1,0 +1,54 @@
+{
+  "request_id": "933f754836d3405dabe9caa08c5a0943",
+  "session_id": "f43d1f727d304993b036cd08730dfb5e",
+  "recipe_id": "tomato_egg",
+  "recipe_version": "1",
+  "trigger": "question",
+  "user_question": "开关在哪里？",
+  "state_version": 3,
+  "snapshot": {
+    "completed_steps": [
+      "S1",
+      "S2"
+    ],
+    "stove_on": false,
+    "related_error_count": 1,
+    "current_step": "S3",
+    "current_step_title": "开启炉灶",
+    "step_number": 3,
+    "step_count": 6
+  },
+  "recent_events": [
+    {
+      "action_id": "beat_egg",
+      "target_id": "egg_bowl",
+      "outcome": "ok",
+      "reason": ""
+    },
+    {
+      "action_id": "cut_tomato",
+      "target_id": "tomato",
+      "outcome": "ok",
+      "reason": ""
+    },
+    {
+      "action_id": "fry_egg",
+      "target_id": "pan",
+      "outcome": "blocked",
+      "reason": "stove_off"
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "操作受阻，请解释原因"
+    },
+    {
+      "role": "assistant",
+      "content": "先检查炉灶是否已经开启。"
+    }
+  ],
+  "allowed_highlight_targets": [
+    "stove_switch"
+  ]
+}

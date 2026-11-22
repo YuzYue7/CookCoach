@@ -1,0 +1,11 @@
+{
+  "request_id": "933f754836d3405dabe9caa08c5a0943",
+  "session_id": "f43d1f727d304993b036cd08730dfb5e",
+  "source": "mock",
+  "state_version": 3,
+  "guidance": {
+    "message": "看金色圆圈，点击它指向的炉灶旋钮。",
+    "hint_level": "direct",
+    "highlight_target_id": "stove_switch"
+  }
+}

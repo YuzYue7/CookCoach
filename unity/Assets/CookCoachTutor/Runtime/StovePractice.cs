@@ -20,7 +20,8 @@ namespace CookCoach.Tutoring
         float elapsed;
         bool reminded;
         Transform marker;
-        Button action;
+        Button action, switchPractice;
+        public RecipeRehearsal Rehearsal { get; private set; }
         UIDocument doc;
         KitchenEvent[] events;
 
@@ -33,7 +34,23 @@ namespace CookCoach.Tutoring
             tutor.RegisterTarget("stove_switch", marker, "炉灶开关");
             action = new Button(OnAction) { name = "lessonAction" };
             doc.rootVisualElement.Q("hud").Add(action);
-            Restart();
+            var hud=doc.rootVisualElement.Q("hud");
+            Rehearsal=new RecipeRehearsal(tutor,hud,lit=>flame.SetActive(lit));
+            switchPractice=new Button(TogglePractice){name="switchPractice"};
+            switchPractice.AddToClassList("dark");switchPractice.AddToClassList("chip");hud.Add(switchPractice);
+            BeginRehearsal();
+        }
+
+        void TogglePractice()
+        {
+            if(Rehearsal.Active) Restart(); else BeginRehearsal();
+        }
+        public void BeginRehearsal()
+        {
+            action.style.display=DisplayStyle.None;
+            pan.position=burner.position;
+            switchPractice.text="切换热锅小样";
+            Rehearsal.Start();
         }
 
         void OnAction()
@@ -44,6 +61,8 @@ namespace CookCoach.Tutoring
 
         public void Restart()
         {
+            Rehearsal.Close(); tutor.InputSource="stove_sample";
+            switchPractice.text="切换六步联调";
             session = Guid.NewGuid().ToString("N");
             revision = 0;
             stage = Stage.PlacePan;
@@ -59,7 +78,7 @@ namespace CookCoach.Tutoring
 
         public void PlacePan()
         {
-            if (stage != Stage.PlacePan) return;
+            if (tutor.IsWaiting || Rehearsal.Active || stage != Stage.PlacePan) return;
             stage = Stage.Ignite;
             revision++;
             events = new[] { new KitchenEvent { action_id="place_pan", outcome="ok" } };
@@ -71,7 +90,7 @@ namespace CookCoach.Tutoring
 
         public void Ignite()
         {
-            if (stage != Stage.Ignite) return;
+            if (tutor.IsWaiting || Rehearsal.Active || stage != Stage.Ignite) return;
             stage = Stage.Done;
             revision++;
             events = new[] { events[0], new KitchenEvent { action_id="turn_on_stove", outcome="ok" } };
@@ -99,34 +118,35 @@ namespace CookCoach.Tutoring
 
         void Update()
         {
-            if (stage == Stage.Ignite && !reminded && !tutor.IsWaiting) {
+            if (doc==null || tutor.IsWaiting) return;
+            if (!Rehearsal.Active && stage == Stage.Ignite && !reminded && !tutor.IsWaiting) {
                 elapsed += Time.deltaTime;
                 if (elapsed >= reminderSeconds) {
                     reminded = true;
                     tutor.ShowSceneCue("锅底还没热。点一下金色圆圈里的开关，把炉火打开。", "stove_switch");
                 }
             }
-            if (!Input.GetMouseButtonDown(0) || doc == null || stage == Stage.Done) return;
+            if (!Input.GetMouseButtonDown(0) || (!Rehearsal.Active && stage == Stage.Done)) return;
             Vector3 mouse = Input.mousePosition;
             var panel = doc.rootVisualElement.panel;
             if (panel == null) return;
             var point = RuntimePanelUtils.ScreenToPanel(panel, new Vector2(mouse.x, Screen.height - mouse.y));
             for (var e=panel.Pick(point); e!=null; e=e.parent)
-                if (e is Button || e.name=="card" || e.name=="log" || e.name=="progress") return;
+                if (e is Button || e.name=="card" || e.name=="log" || e.name=="progress" || e.name=="rehearsal" || e.name=="reviewPanel") return;
             var ray = lessonCamera.ScreenPointToRay(mouse);
-            if (stage == Stage.PlacePan) {
+            if (!Rehearsal.Active && stage == Stage.PlacePan) {
                 if (pan.GetComponentInChildren<Renderer>().bounds.IntersectRay(ray)) PlacePan();
             } else {
                 Bounds hit = knob.bounds;
                 hit.Expand(.085f);
-                if (hit.IntersectRay(ray)) Ignite();
+                if (hit.IntersectRay(ray)) { if(Rehearsal.Active) Rehearsal.TryStep(2); else Ignite(); }
             }
         }
 
         void OnDestroy()
         {
             if (tutor != null) tutor.UnregisterTarget("stove_switch");
-            action?.RemoveFromHierarchy();
+            Rehearsal?.Dispose(); switchPractice?.RemoveFromHierarchy(); action?.RemoveFromHierarchy();
         }
     }
 }
