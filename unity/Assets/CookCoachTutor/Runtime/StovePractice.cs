@@ -37,7 +37,7 @@ namespace CookCoach.Tutoring
             var hud=doc.rootVisualElement.Q("hud");
             Rehearsal=new RecipeRehearsal(tutor,hud,lit=>flame.SetActive(lit));
             switchPractice=new Button(TogglePractice){name="switchPractice"};
-            switchPractice.AddToClassList("dark");switchPractice.AddToClassList("chip");hud.Add(switchPractice);
+            switchPractice.AddToClassList("chip");hud.Q("log").Add(switchPractice);
             BeginRehearsal();
         }
 

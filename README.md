@@ -11,7 +11,7 @@ COMP5140 group project
 ## 本地启动
 
 1. 克隆仓库，在 Unity Hub 中打开 `unity/`。
-2. 本分支打开 `Assets/Scenes/KitchenTutorPractice.unity` 并点击 Play。默认是六步导师联调，右下角标注模拟动作。左上角可切换热锅小样。
+2. 本分支打开 `Assets/Scenes/KitchenTutorPractice.unity` 并点击 Play。默认是六步导师联调，导师卡内可执行当前模拟动作，或打开“其他动作”。打开“交互记录”可切换热锅小样。
 3. 当前可使用本地提示，也可以运行 `python tools/tutor_fixture.py` 验证 HTTP。团队 FastAPI 服务交付后，将 KitchenTutor 的 Mode 设为 Http 并填写 Endpoint。
    环境变量名称见 `backend/.env.example`，实际密钥由开发者在本地配置。
 4. `/health` 用于检查后端服务。真实模型是否可用，通过一次指导请求确认。

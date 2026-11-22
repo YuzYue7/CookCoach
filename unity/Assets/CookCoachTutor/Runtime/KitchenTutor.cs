@@ -24,7 +24,8 @@ namespace CookCoach.Tutoring
         VisualElement root, card, marker, log, ticks;
         Label message, source, trace, targetName;
         TextField question;
-        Button send, tip, locate, retry;
+        Button send, tip, locate, retry, askToggle;
+        bool asking;
         readonly Dictionary<string, (Transform anchor, string title)> targets = new();
         readonly List<TutorTurn> history = new();
         readonly HashSet<string> retiredSessions = new();
@@ -68,6 +69,9 @@ namespace CookCoach.Tutoring
             question.labelElement.style.width=32;
 #endif
             send=root.Q<Button>("send"); tip=root.Q<Button>("tip"); locate=root.Q<Button>("locate"); retry=root.Q<Button>("retry");
+            askToggle=root.Q<Button>("askToggle");
+            askToggle.clicked+=()=>{ if(IsWaiting) Cancel(); else SetAsking(!asking); };
+            SetAsking(false);
             send.clicked += () => { if(IsWaiting) Cancel(); else SubmitTyped(); };
             tip.clicked += () => Ask("hint","");
             locate.clicked += () => Ask("question","开关在哪里？");
@@ -124,6 +128,15 @@ namespace CookCoach.Tutoring
             pen.BeginPath(); pen.MoveTo(new Vector2(13,15)); pen.LineTo(new Vector2(31,15)); pen.Stroke();
         }
 
+        void SetAsking(bool open)
+        {
+            asking=open;
+            Show(root.Q("askPanel"),open);
+            Show(root.Q("actionSlot"),!open);
+            askToggle.text=IsWaiting?"取消请求":open?"返回":"提问";
+            if(open) question.Focus();
+        }
+
         public void SetExpanded(bool value)
         {
             expanded=value;
@@ -155,7 +168,7 @@ namespace CookCoach.Tutoring
             if(message!=null) {
                 message.text=fresh?"练习已开始。需要帮助时，可以问我。":"当前步骤 · "+context.snapshot.current_step_title;
                 question.SetValueWithoutNotify(""); Show(retry,false);
-                if(fresh) SetExpanded(startExpanded);
+                if(fresh) { SetAsking(false); SetExpanded(startExpanded); }
             }
             RefreshContextView(); UpdateReview(!wasComplete || fresh); RenderTrace();
         }
@@ -285,7 +298,7 @@ namespace CookCoach.Tutoring
             string detail=trigger=="error"?"操作受阻，自动求助":trigger=="question"?"提问 · "+lastQuestion:"主动索取提示";
             Journal.Add(context,"request",(retrying?"重试 · ":"")+detail,payload,latestId,mode.ToString());
             UpdateReview(false); RenderTrace();
-            message.text="导师正在思考…"; SetBusy(true);
+            SetAsking(false); message.text="导师正在思考…"; SetBusy(true);
             pending=StartCoroutine(Receive(request,payload));
         }
 
@@ -333,9 +346,10 @@ namespace CookCoach.Tutoring
         void SetBusy(bool busy)
         {
             bool changed=IsWaiting!=busy; IsWaiting=busy; if(changed) WaitingChanged?.Invoke(busy); if(card==null)return;
+            askToggle.text=busy?"取消请求":asking?"返回":"提问";
             send.text=busy?"取消":"发送";send.SetEnabled(context!=null);
             question.SetEnabled(!busy && context!=null);tip.SetEnabled(!busy && context!=null);
-            locate.SetEnabled(!busy && context!=null && !context.snapshot.stove_on && targets.ContainsKey("stove_switch") && (context.snapshot.current_step=="ignite" || context.snapshot.current_step=="S3"));
+            Show(locate,!busy && context!=null && !context.snapshot.stove_on && targets.ContainsKey("stove_switch") && (context.snapshot.current_step=="ignite" || context.snapshot.current_step=="S3"));
         }
         void Fail(string msg,string detail)
         {

@@ -33,7 +33,8 @@ namespace CookCoach.Tutoring
                 else if(point) message="看金色标记，点炉台前面靠左的旋钮。";
                 else if(request.trigger=="error" && request.recent_events.Length>0) {
                     var last=request.recent_events[request.recent_events.Length-1];
-                    message=TomatoEggLesson.ActionName(last.action_id)+"暂时不能执行："+TomatoEggLesson.ReasonName(last.reason)+"。";
+                    if(last.reason=="stove_off") message="锅还没热，先检查炉灶有没有打开。";
+                    else if(step>=0) message="先"+TomatoEggLesson.Titles[step]+"，再"+TomatoEggLesson.ActionName(last.action_id)+"。";
                 } else if(step>=0) message=TomatoEggLesson.Instructions[step];
             }
             done(new TutorReply { request_id = request.request_id, session_id = request.session_id,

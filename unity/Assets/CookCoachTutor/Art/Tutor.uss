@@ -42,8 +42,19 @@ Label { margin:0; padding:0; }
 #reviewText,#exportStatus {white-space:normal;color:#fff3d9;font-size:15px;}
 #export {margin-top:8px;align-self:flex-start;}
 #exportStatus {font-size:12px;}
-#rehearsal {position:absolute;bottom:22px;right:24px;width:258px;max-width:40%;padding:11px 14px;}
-#rehearsalActions {flex-direction:row;flex-wrap:wrap;}
-#rehearsal .chip {margin-top:5px;}
-#rehearsalTitle {font-size:14px;color:#f2d7a4;}
-#switchPractice {position:absolute;top:22px;left:240px;}
+#card { width:378px; border-top-width:1px; border-top-color:#c4b59c; border-left-width:4px; border-left-color:#a8583d; }
+.head { border-bottom-width:0; padding-bottom:0; }
+.title {font-size:18px;}
+.origin {margin-left:8px;font-size:12px;}
+.body {font-size:20px;min-height:0;margin-top:8px;}
+.fold {margin-left:0;}
+.textAction {background-color:rgba(0,0,0,0);color:#47614e;font-size:14px;padding:4px 6px;border-radius:4px;}
+.textAction:hover,.alternate:hover {background-color:#e5e7d6;}
+#askToggle {margin-left:auto;}
+#rehearsal {margin-top:13px;}
+#nextAction {background-color:#2c5344;color:#fff9e8;border-radius:7px;padding:6px 14px;font-size:16px;}
+#nextAction:hover {background-color:#3d6553;}
+#otherActions {margin-left:8px;}
+#rehearsalActions {margin-top:8px;border-top-width:1px;border-top-color:#dcd1ba;flex-direction:row;flex-wrap:wrap;}
+.alternate {background-color:rgba(0,0,0,0);color:#405849;padding:5px 9px;font-size:14px;margin-top:3px;}
+#switchPractice {align-self:flex-start;margin-top:10px;}
