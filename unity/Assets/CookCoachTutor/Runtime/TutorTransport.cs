@@ -26,10 +26,17 @@ namespace CookCoach.Tutoring
                 : on ? "炉灶已经打开，现在可以把蛋液倒入锅中。"
                 : point ? "找到金色圆圈里的炉灶开关，点一下就能开火。"
                 : "鸡蛋已经打散了。先检查炉灶是否打开，再试着炒蛋。";
+            string highlight="stove_switch";
             int step=Array.IndexOf(TomatoEggLesson.Ids,request.snapshot.current_step);
             if(request.snapshot.step_count==6) {
                 point=point && request.snapshot.current_step=="S3";
                 if(request.snapshot.current_step=="done") message="这轮已完成，可以在回顾里查看清单和本轮操作。";
+                else if(request.snapshot.current_step=="S6") {
+                    string action=TomatoEggLesson.FinishPhase(request.snapshot);
+                    message=TomatoEggLesson.FinishCue(action);
+                    highlight=action==TomatoEggLesson.ReturnEgg?"plate":TomatoEggLesson.FinishTarget(action);
+                    point=location && Array.IndexOf(request.allowed_highlight_targets,highlight)>=0;
+                }
                 else if(point) message="看金色标记，点炉台前面靠左的旋钮。";
                 else if(request.trigger=="error" && request.recent_events.Length>0) {
                     var last=request.recent_events[request.recent_events.Length-1];
@@ -37,10 +44,14 @@ namespace CookCoach.Tutoring
                     else if(step>=0) message="先"+TomatoEggLesson.Titles[step]+"，再"+TomatoEggLesson.ActionName(last.action_id)+"。";
                 } else if(step>=0) message=TomatoEggLesson.Instructions[step];
             }
+            if(request.trigger=="error" && request.recent_events.Length>0) {
+                string blocked=TomatoEggLesson.BlockedFinishCue(request.snapshot,request.recent_events[request.recent_events.Length-1]);
+                if(blocked.Length>0) message=blocked;
+            }
             done(new TutorReply { request_id = request.request_id, session_id = request.session_id,
                 state_version = request.state_version, source = "mock",
                 guidance = new Advice { message = message, hint_level = point ? "direct" : "check",
-                    highlight_target_id = point ? "stove_switch" : "" } });
+                    highlight_target_id = point ? highlight : "" } });
         }
 
         public static UnityWebRequest CreateHttp(string endpoint, string json)

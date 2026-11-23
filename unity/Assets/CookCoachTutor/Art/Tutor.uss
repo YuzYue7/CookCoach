@@ -58,3 +58,8 @@ Label { margin:0; padding:0; }
 #rehearsalActions {margin-top:8px;border-top-width:1px;border-top-color:#dcd1ba;flex-direction:row;flex-wrap:wrap;}
 .alternate {background-color:rgba(0,0,0,0);color:#405849;padding:5px 9px;font-size:14px;margin-top:3px;}
 #switchPractice {align-self:flex-start;margin-top:10px;}
+#objectVerb { position:absolute; padding:5px 11px; background-color:rgba(35,62,51,.96); color:#fff4d8; border-radius:8px; font-size:15px; }
+#reviewPanel > .chip, #log > .chip { align-self:flex-start; margin-top:7px; }
+
+#emblem { width:54px; height:54px; border-radius:12px; background-color:white; background-image:url("Mentor.jpg"); -unity-background-scale-mode:scale-to-fit; }
+#walkHints { position:absolute; right:24px; bottom:20px; max-width:54%; padding:5px 10px; border-radius:7px; color:#fff8e4; background-color:rgba(36,54,45,.88); font-size:14px; white-space:normal; }

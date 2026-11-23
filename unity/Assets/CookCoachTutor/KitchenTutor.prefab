@@ -70,5 +70,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CookCoach.Tutoring.KitchenTutor
   mode: 0
   endpoint: http://127.0.0.1:8000/api/v1/guidance
-  stylesheet: {fileID: 7433441132597879392, guid: 7670594607a853040970ebe6fb00559d, type: 3}
   startExpanded: 1

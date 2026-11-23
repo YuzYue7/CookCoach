@@ -52,7 +52,8 @@ namespace CookCoach.Checks
             TutorRequest Request() => JsonUtility.FromJson<TutorRequest>(Last("request").payload);
             tutor.mode=TutorMode.LocalPreview;
             stove.BeginRehearsal();
-            for(int i=0;i<6;i++) practice.TryStep(i);
+            for(int i=0;i<5;i++) practice.TryStep(i);
+            foreach(string action in TomatoEggLesson.FinishActions) practice.TryFinish(action);
             Expect(tutor.Journal.review.Contains("受阻操作 0 次，主动求助 0 次"),"clean six-step completion");
             tutor.mode=TutorMode.Http; tutor.endpoint="http://127.0.0.1:18741/api/v1/guidance";
             practice.Start(); practice.TryStep(1);practice.TryStep(0);practice.TryStep(0);
@@ -69,7 +70,8 @@ namespace CookCoach.Checks
             practice.TryStep(2); Expect(tutor.ActiveHighlight=="" && Last("action").previous_guidance_id==pointedBy,"correction linked to guidance and clears highlight");
             tutor.Ask("question","现在呢？");yield return Ready();
             Expect(Request().snapshot.stove_on && tutor.LastMessage.Contains("蛋液"),"post-correction guidance");
-            practice.TryStep(3);practice.TryStep(4);practice.TryStep(5);
+            practice.TryStep(3);practice.TryStep(4);
+            foreach(string action in TomatoEggLesson.FinishActions) practice.TryFinish(action);
             Expect(tutor.Journal.review.Contains("受阻操作 1 次，主动求助 2 次") && tutor.Journal.review.Contains("炉灶未开启"),"review from actual events");
             string file=tutor.ExportEvidence();var saved=JsonUtility.FromJson<TutorJournal>(File.ReadAllText(file));
             Expect(saved.rows.Count==tutor.Journal.rows.Count && saved.review==tutor.Journal.review && saved.input_source=="simulated_actions","full-session JSON round trip");

@@ -1,27 +1,28 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+ <Style src="Tutor.uss"/>
  <ui:VisualElement name="hud" picking-mode="Ignore">
   <ui:VisualElement name="progress" class="dark" picking-mode="Ignore">
    <ui:VisualElement class="horizontal"><ui:Label name="recipe" text="番茄炒蛋" class="recipe"/><ui:Label name="count" class="muted"/></ui:VisualElement>
    <ui:VisualElement class="horizontal progressLine"><ui:Label name="step" text="准备练习"/><ui:VisualElement name="ticks" class="horizontal"/></ui:VisualElement>
   </ui:VisualElement>
   <ui:Button name="logButton" text="交互记录" class="dark topButton"/>
-  <ui:Button name="reviewButton" text="本轮回顾" class="topButton dark"/>
-  <ui:VisualElement name="beacon" picking-mode="Ignore"><ui:VisualElement name="ring" picking-mode="Ignore"/><ui:Label name="targetName" picking-mode="Ignore"/></ui:VisualElement>
+  <ui:Button name="reviewButton" style="display: none;" text="本轮回顾" class="topButton dark"/>
+  <ui:VisualElement name="beacon" style="display: none;" picking-mode="Ignore"><ui:VisualElement name="ring" picking-mode="Ignore"/><ui:Label name="targetName" picking-mode="Ignore"/></ui:VisualElement>
   <ui:VisualElement name="card">
    <ui:VisualElement class="horizontal head">
     <ui:VisualElement name="emblem" picking-mode="Ignore"/><ui:Label text="厨房导师" class="title"/><ui:Label name="origin" class="origin"/>
-    <ui:Button name="retry" text="重试" class="textAction"/><ui:Button name="askToggle" text="提问" class="textAction"/><ui:Button name="fold" text="−" tooltip="收起导师" class="fold"/>
+    <ui:Button name="retry" style="display: none;" text="重试" class="textAction"/><ui:Button name="askToggle" text="提问" class="textAction"/><ui:Button name="fold" text="−" tooltip="收起导师" class="fold"/>
    </ui:VisualElement>
    <ui:Label name="hint" class="body" text="准备开始练习。"/>
    <ui:VisualElement name="actionSlot"/>
-   <ui:VisualElement name="askPanel">
-    <ui:VisualElement class="horizontal suggestions"><ui:Button name="tip" text="下一步怎么做？" class="textAction"/><ui:Button name="locate" text="开关在哪里？" class="textAction"/></ui:VisualElement>
+   <ui:VisualElement name="askPanel" style="display: none;">
+    <ui:VisualElement class="horizontal suggestions"><ui:Button name="tip" text="下一步怎么做？" class="textAction"/><ui:Button name="locate" style="display: none;" text="开关在哪里？" class="textAction"/></ui:VisualElement>
     <ui:VisualElement class="horizontal compose"><ui:TextField name="question" max-length="240" tooltip="输入问题"/><ui:Button name="send" text="发送" class="primary"/></ui:VisualElement>
    </ui:VisualElement>
   </ui:VisualElement>
-  <ui:Button name="expand" text="厨房导师" class="dark expand"/>
-  <ui:VisualElement name="log" class="dark"><ui:VisualElement class="horizontal"><ui:Label text="本轮交互记录" class="logTitle"/><ui:Button name="closeLog" text="×" class="logClose"/></ui:VisualElement><ui:ScrollView name="scroll"><ui:Label name="trace"/></ui:ScrollView><ui:VisualElement class="horizontal"><ui:Button name="payload" text="查看请求与回复" class="chip"/><ui:Button name="export" text="导出本轮记录" class="chip"/></ui:VisualElement><ui:Label name="exportStatus"/></ui:VisualElement>
-  <ui:VisualElement name="reviewPanel" class="dark">
+  <ui:Button name="expand" style="display: none;" text="厨房导师" class="dark expand"/>
+  <ui:VisualElement name="log" style="display: none;" class="dark"><ui:VisualElement class="horizontal"><ui:Label text="本轮交互记录" class="logTitle"/><ui:Button name="closeLog" text="×" class="logClose"/></ui:VisualElement><ui:ScrollView name="scroll"><ui:Label name="trace"/></ui:ScrollView><ui:VisualElement class="horizontal"><ui:Button name="payload" text="查看请求与回复" class="chip"/><ui:Button name="export" text="导出本轮记录" class="chip"/></ui:VisualElement><ui:Label name="exportStatus"/></ui:VisualElement>
+  <ui:VisualElement name="reviewPanel" style="display: none;" class="dark">
    <ui:VisualElement class="horizontal"><ui:Label text="番茄炒蛋 · 本轮回顾" class="logTitle"/><ui:Button name="closeReview" text="×" tooltip="收起回顾" class="logClose"/></ui:VisualElement>
    <ui:ScrollView name="reviewScroll"><ui:Label name="reviewText"/></ui:ScrollView>
    <ui:Button name="copyReview" text="复制做饭清单和练习记录" class="chip"/>

@@ -7,7 +7,7 @@ namespace CookCoach.Tutoring
         public string[] completed_steps = Array.Empty<string>();
         public bool stove_on;
         public int related_error_count;
-        public string current_step, current_step_title;
+        public string current_step, current_step_title, finish_phase;
         public int step_number, step_count;
     }
 

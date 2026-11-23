@@ -14,12 +14,12 @@ namespace CookCoach.Tutoring
     {
         public TutorMode mode = TutorMode.LocalPreview;
         public string endpoint = "http://127.0.0.1:8000/api/v1/guidance";
-        public StyleSheet stylesheet;
         public bool startExpanded = true;
         public bool IsWaiting { get; private set; }
         public string ActiveHighlight { get; private set; } = "";
         public string LastMessage => message.text;
         public event Action<string> HighlightChanged;
+        public event Action<KitchenContext> ContextChanged;
 
         VisualElement root, card, marker, log, ticks;
         Label message, source, trace, targetName;
@@ -52,7 +52,6 @@ namespace CookCoach.Tutoring
         {
             root = GetComponent<UIDocument>().rootVisualElement;
             root.pickingMode = PickingMode.Ignore;
-            if (stylesheet != null) root.styleSheets.Add(stylesheet);
             uiFont = Font.CreateDynamicFontFromOSFont(new[] {"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Arial"}, 18);
             if (uiFont != null) {
                 root.style.unityFontDefinition = FontDefinition.FromFont(uiFont);
@@ -85,7 +84,7 @@ namespace CookCoach.Tutoring
             root.Q<Button>("expand").clicked+=()=>SetExpanded(true);
             root.Q<Button>("logButton").clicked+=()=>Show(log,log.resolvedStyle.display==DisplayStyle.None);
             root.Q<Button>("closeLog").clicked+=()=>Show(log,false);
-            root.Q("emblem").generateVisualContent+=DrawEmblem;
+
             SetExpanded(startExpanded); Show(marker,false); Show(log,false); Show(retry,false);
             reviewPanel=root.Q("reviewPanel"); reviewText=root.Q<Label>("reviewText");
             reviewButton=root.Q<Button>("reviewButton"); exportStatus=root.Q<Label>("exportStatus");
@@ -105,28 +104,9 @@ namespace CookCoach.Tutoring
             RenderTrace();
         }
 
-        static void DrawEmblem(MeshGenerationContext g)
-        {
-            var pen = g.painter2D;
-            Color ink = new Color32(43, 65, 51, 255);
-            void Disc(float x, float y, float radius, Color color) {
-                pen.fillColor=color; pen.BeginPath(); pen.Arc(new Vector2(x,y), radius, 0f, 360f); pen.Fill();
-            }
-            Disc(22,22,21,new Color32(217,229,203,255));
-            Disc(22,40,12,new Color32(170,78,52,255));
-            Disc(22,23,12,ink);
-            Disc(22,24,10.5f,new Color32(240,193,146,255));
-            pen.lineWidth=1.3f; pen.strokeColor=ink;
-            Disc(18,24,1.1f,ink); Disc(26,24,1.1f,ink);
-            pen.BeginPath(); pen.MoveTo(new Vector2(19,28)); pen.QuadraticCurveTo(new Vector2(22,31),new Vector2(25,28)); pen.Stroke();
-            pen.fillColor=new Color32(255,251,234,255);
-            pen.BeginPath(); pen.MoveTo(new Vector2(12,18)); pen.LineTo(new Vector2(11,13));
-            pen.QuadraticCurveTo(new Vector2(5,6), new Vector2(15,6));
-            pen.QuadraticCurveTo(new Vector2(21,-2), new Vector2(27,5));
-            pen.QuadraticCurveTo(new Vector2(39,3), new Vector2(33,14));
-            pen.LineTo(new Vector2(32,18)); pen.ClosePath(); pen.Fill(); pen.Stroke();
-            pen.BeginPath(); pen.MoveTo(new Vector2(13,15)); pen.LineTo(new Vector2(31,15)); pen.Stroke();
-        }
+        public bool InteractingWithPanel => asking && expanded
+            || log!=null && log.style.display.value==DisplayStyle.Flex
+            || reviewPanel!=null && reviewPanel.style.display.value==DisplayStyle.Flex;
 
         void SetAsking(bool open)
         {
@@ -164,6 +144,7 @@ namespace CookCoach.Tutoring
             context.snapshot.completed_steps ??= Array.Empty<string>();
             context.recent_events ??= Array.Empty<KitchenEvent>();
             if(context.recent_events.Length>10) context.recent_events=context.recent_events.Skip(context.recent_events.Length-10).ToArray();
+            ContextChanged?.Invoke(context);
             Journal.Add(context,"state",context.snapshot.current_step_title,JsonUtility.ToJson(context.snapshot));
             if(message!=null) {
                 message.text=fresh?"练习已开始。需要帮助时，可以问我。":"当前步骤 · "+context.snapshot.current_step_title;
@@ -298,7 +279,10 @@ namespace CookCoach.Tutoring
             string detail=trigger=="error"?"操作受阻，自动求助":trigger=="question"?"提问 · "+lastQuestion:"主动索取提示";
             Journal.Add(context,"request",(retrying?"重试 · ":"")+detail,payload,latestId,mode.ToString());
             UpdateReview(false); RenderTrace();
-            SetAsking(false); message.text="导师正在思考…"; SetBusy(true);
+            SetAsking(false);
+            string blocked=trigger=="error"?TomatoEggLesson.BlockedFinishCue(context.snapshot,context.recent_events.LastOrDefault()):"";
+            message.text=blocked.Length>0?blocked:"导师正在思考…";
+            SetBusy(true);
             pending=StartCoroutine(Receive(request,payload));
         }
 

@@ -51,12 +51,27 @@ class Fixture(BaseHTTPRequestHandler):
             text = "看金色圆圈，点击它指向的炉灶旋钮。"
         elif on:
             text = "火已经打开，可以倒入蛋液。"
+        if req["snapshot"].get("current_step") == "S6":
+            phase = req["snapshot"].get("finish_phase") or "return_cooked_egg"
+            text, focus = {
+                "return_cooked_egg": ("把盘里的熟鸡蛋拖回锅里，和番茄一起炒。", "plate"),
+                "stir_fry": ("按住锅内绕一圈，把熟蛋和番茄炒匀。", "pan"),
+                "turn_off_stove": ("食材已经炒匀，点左侧旋钮关火。", "stove_switch"),
+                "finish_dish": ("炉火已关，把锅中的成菜装入空盘。", "plate"),
+            }.get(phase, ("请查看当前步骤。", ""))
+            target = focus if "哪里" in question and focus in req["allowed_highlight_targets"] else ""
+        if req.get("trigger") == "error" and req.get("recent_events"):
+            attempt = req["recent_events"][-1]
+            action = {"return_cooked_egg": "熟蛋回锅", "stir_fry": "合炒", "turn_off_stove": "关火", "finish_dish": "装盘"}.get(attempt.get("action_id"))
+            if action and attempt.get("outcome") == "blocked":
+                suffix = "已经完成。" if attempt.get("reason") == "already_done" else "未执行。"
+                text = action + suffix + text
         if question == "test:target":
             target = "unregistered_fixture_target"
         if question == "test:stale":
             reply["state_version"] -= 1
         reply["source"] = "fallback" if question == "test:fallback" else "mock"
-        reply["guidance"] = {"message": text, "hint_level": "direct" if point else "check",
+        reply["guidance"] = {"message": text, "hint_level": "direct" if target else "check",
                              "highlight_target_id": target}
         self.respond(200, reply)
 

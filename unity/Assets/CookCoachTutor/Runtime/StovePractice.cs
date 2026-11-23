@@ -13,6 +13,22 @@ namespace CookCoach.Tutoring
         public Transform pan, panRest, burner;
         public GameObject flame;
         [Min(0.1f)] public float reminderSeconds = 5f;
+        public GameObject workbenchPrefab;
+        [Tooltip("可选：实现 IKitchenWorkflow 的正式流程组件")]
+        public MonoBehaviour workflow;
+        IKitchenWorkflow Rules => workflow as IKitchenWorkflow;
+        KitchenWorkbench workbench;
+        bool desktop;
+        public TextAsset walkableFloor;
+        KitchenWalk walk;
+        CookingHands hands;
+        Label walkHints;
+        const string WalkHelp="WASD 移动　·　按住右键环视　·　F 回到灶台";
+        Button simulator, reset;
+        Label hover;
+        Vector3 sampleCameraPosition;
+        Quaternion sampleCameraRotation;
+        float sampleField;
         enum Stage { PlacePan, Ignite, Done }
         Stage stage;
         string session;
@@ -38,15 +54,87 @@ namespace CookCoach.Tutoring
             Rehearsal=new RecipeRehearsal(tutor,hud,lit=>flame.SetActive(lit));
             switchPractice=new Button(TogglePractice){name="switchPractice"};
             switchPractice.AddToClassList("chip");hud.Q("log").Add(switchPractice);
-            BeginRehearsal();
+            simulator = LogButton(hud,"切换模拟动作",ToggleSimulator);
+            reset = LogButton(hud,"重新开始本轮",ResetCurrent);
+            var again = new Button(ResetCurrent) {text="再练一次"};
+            again.AddToClassList("chip");
+            hud.Q("reviewPanel").Add(again);
+            hover = new Label {name="objectVerb",pickingMode=PickingMode.Ignore};
+            hud.Add(hover);
+            hover.style.display=DisplayStyle.None;
+            sampleCameraPosition=lessonCamera.transform.position;
+            sampleCameraRotation=lessonCamera.transform.rotation;
+            sampleField=lessonCamera.fieldOfView;
+            var props=Instantiate(workbenchPrefab,transform);
+            workbench=new KitchenWorkbench(props,pan,knob,flame,tutor);
+            walk=new KitchenWalk(lessonCamera,walkableFloor);
+            hands=new CookingHands(workbench,props.transform,pan,lessonCamera,SubmitFromHands,SubmitFinish);
+            walkHints=new Label {name="walkHints",pickingMode=PickingMode.Ignore};
+            hud.Add(walkHints);
+            tutor.ContextChanged+=hands.Sync;
+            tutor.ContextChanged+=workbench.Render;
+            BeginDesktop();
+        }
+
+        static Button LogButton(VisualElement hud,string title,Action click)
+        {
+            var button=new Button(click){text=title};button.AddToClassList("chip");hud.Q("log").Add(button);
+            return button;
+        }
+
+        void ResetCurrent()
+        {
+            if(desktop) BeginDesktop();
+            else if(Rehearsal.Active) BeginRehearsal();
+            else Restart();
+        }
+
+        void ToggleSimulator()
+        {
+            if(desktop) BeginRehearsal(); else BeginDesktop();
+        }
+
+        public void BeginDesktop()
+        {
+            desktop=true;
+            hands.CancelGesture();
+            pan.position=burner.position;
+            walk.Home();
+            walkHints.text=WalkHelp;
+            walkHints.style.display=DisplayStyle.Flex;
+            workbench.Show(true);
+            action.style.display=DisplayStyle.None;
+            simulator.text="切换模拟动作";
+            switchPractice.text="切换热锅小样";
+            if(workflow==null) Rehearsal.Begin(true);
+            else {
+                Rehearsal.Close();
+                if(Rules==null) throw new InvalidOperationException("Workflow must implement IKitchenWorkflow.");
+                tutor.InputSource="kitchen";
+                Rules.BeginLesson(tutor);
+            }
+        }
+
+        void LeaveDesktop()
+        {
+            hands.CancelGesture();
+            walkHints.style.display=DisplayStyle.None;
+            desktop=false;
+            workbench.Show(false);
+            tutor.RegisterTarget("stove_switch",marker,"炉灶开关");
+            hover.style.display=DisplayStyle.None;
+            lessonCamera.transform.SetPositionAndRotation(sampleCameraPosition,sampleCameraRotation);
+            lessonCamera.fieldOfView=sampleField;
+            simulator.text="返回厨房练习";
         }
 
         void TogglePractice()
         {
-            if(Rehearsal.Active) Restart(); else BeginRehearsal();
+            if(desktop || Rehearsal.Active) Restart(); else BeginDesktop();
         }
         public void BeginRehearsal()
         {
+            LeaveDesktop();
             action.style.display=DisplayStyle.None;
             pan.position=burner.position;
             switchPractice.text="切换热锅小样";
@@ -61,8 +149,9 @@ namespace CookCoach.Tutoring
 
         public void Restart()
         {
+            LeaveDesktop();
             Rehearsal.Close(); tutor.InputSource="stove_sample";
-            switchPractice.text="切换六步联调";
+            switchPractice.text="返回厨房练习";
             session = Guid.NewGuid().ToString("N");
             revision = 0;
             stage = Stage.PlacePan;
@@ -118,7 +207,32 @@ namespace CookCoach.Tutoring
 
         void Update()
         {
-            if (doc==null || tutor.IsWaiting) return;
+            if (doc==null) return;
+            if (desktop) {
+                if(!Application.isFocused || tutor.InteractingWithPanel || tutor.IsWaiting) {
+                    if(hands.Busy) hands.CancelGesture();
+                    hover.style.display=DisplayStyle.None;
+                    walkHints.style.display=DisplayStyle.None;
+                    return;
+                }
+                walkHints.style.display=DisplayStyle.Flex;
+                if(Input.GetKeyDown(KeyCode.F)) { hands.CancelGesture(); walk.Home(); }
+                if(Input.GetKeyDown(KeyCode.Escape)) hands.CancelGesture();
+                bool looking=Input.GetMouseButton(1);
+                if(looking && hands.Busy) hands.CancelGesture();
+                if(!hands.Busy) {
+                    Vector2 move=new Vector2(Input.GetAxisRaw("Horizontal"),Input.GetAxisRaw("Vertical"));
+                    Vector2 look=looking?new Vector2(Input.GetAxis("Mouse X"),Input.GetAxis("Mouse Y")):Vector2.zero;
+                    walk.Move(move,look,Time.unscaledDeltaTime);
+                }
+                hands.Animate();
+                if(looking) hover.style.display=DisplayStyle.None;
+                else if(!hands.Busy) HandlePointer(Input.mousePosition,HandInput.Hover);
+                string status=hands.Status;
+                walkHints.text=string.IsNullOrEmpty(status)?WalkHelp:status;
+                return;
+            }
+            if (tutor.IsWaiting) return;
             if (!Rehearsal.Active && stage == Stage.Ignite && !reminded && !tutor.IsWaiting) {
                 elapsed += Time.deltaTime;
                 if (elapsed >= reminderSeconds) {
@@ -143,9 +257,71 @@ namespace CookCoach.Tutoring
             }
         }
 
+        void OnGUI()
+        {
+            if(!desktop || hands==null || !Application.isFocused || tutor.IsWaiting ||
+                tutor.InteractingWithPanel || Input.GetMouseButton(1)) return;
+            var e=Event.current;
+            if(e.button!=0) return;
+            HandInput input;
+            switch(e.rawType) {
+                case EventType.MouseDown: input=HandInput.Press; break;
+                case EventType.MouseDrag: input=HandInput.Hold; break;
+                case EventType.MouseUp: input=HandInput.Release; break;
+                default: return;
+            }
+            HandlePointer(new Vector2(e.mousePosition.x,Screen.height-e.mousePosition.y),input);
+        }
+
+        void OnApplicationFocus(bool focus)
+        {
+            if(!focus) hands?.CancelGesture();
+        }
+
+        void SubmitFromHands(int step)
+        {
+            if(workflow==null) Rehearsal.TryStep(step);
+            else Rules.Attempt(TomatoEggLesson.Actions[step],TomatoEggLesson.Targets[step],tutor);
+        }
+
+        void SubmitFinish(string action)
+        {
+            if(workflow==null) Rehearsal.TryFinish(action);
+            else Rules.Attempt(action,TomatoEggLesson.FinishTarget(action),tutor);
+        }
+
+        public bool HandlePointer(Vector2 screen,HandInput input)
+        {
+            var panel=doc.rootVisualElement.panel;
+            hover.style.display=DisplayStyle.None;
+            if(!desktop || panel==null || tutor.IsWaiting || tutor.InteractingWithPanel) return false;
+            var point=RuntimePanelUtils.ScreenToPanel(panel,new Vector2(screen.x,Screen.height-screen.y));
+            for(var e=panel.Pick(point); e!=null; e=e.parent) {
+                if(e is Button || e.name=="card" || e.name=="progress" || e.name=="log" || e.name=="reviewPanel") {
+                    if(input==HandInput.Release) hands.CancelGesture();
+                    return false;
+                }
+            }
+            string id=workbench.Pick(lessonCamera.ScreenPointToRay(screen),!hands.Equipped);
+            string verb=hands.Verb(id);
+            hands.Pointer(id,screen,input);
+            if(!hands.Busy && input==HandInput.Hover && verb.Length>0 && tutor.ActiveHighlight!=id) {
+                hover.text=verb;
+                hover.style.left=Mathf.Clamp(point.x+15,0,Mathf.Max(0,panel.visualTree.layout.width-168));
+                hover.style.top=Mathf.Clamp(point.y+14,0,Mathf.Max(0,panel.visualTree.layout.height-38));
+                hover.style.display=DisplayStyle.Flex;
+            }
+            return verb.Length>0;
+        }
+
         void OnDestroy()
         {
-            if (tutor != null) tutor.UnregisterTarget("stove_switch");
+            if(tutor!=null && workbench!=null) {
+                tutor.ContextChanged-=hands.Sync;
+                tutor.ContextChanged-=workbench.Render;
+                hands.CancelGesture();
+                foreach(string id in TomatoEggLesson.Targets) tutor.UnregisterTarget(id);
+            }
             Rehearsal?.Dispose(); switchPractice?.RemoveFromHierarchy(); action?.RemoveFromHierarchy();
         }
     }

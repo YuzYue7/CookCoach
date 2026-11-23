@@ -1145,6 +1145,9 @@ MonoBehaviour:
   panRest: {fileID: 871842113}
   burner: {fileID: 2044105021}
   flame: {fileID: 1400969169}
+  workbenchPrefab: {fileID: 2441991630969716349, guid: 46877de8af78e9b45a5c305ed667b165, type: 3}
+  walkableFloor: {fileID: 4900000, guid: 5358b81b16064635a3b24bd67e6b6a61, type: 3}
+  workflow: {fileID: 0}
   reminderSeconds: 5
 --- !u!4 &828867366
 Transform:
