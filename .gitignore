@@ -6,3 +6,11 @@
 /UserSettings/
 /.vsconfig
 /*.sln
+
+# Python / backend（.venv、真实 .env、密钥、日志不入库）
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/.env
+backend/logs/
