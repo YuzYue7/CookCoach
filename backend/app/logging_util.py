@@ -14,7 +14,7 @@ from .config import log_dir
 _lock = threading.Lock()
 
 
-def log_guidance(record: dict) -> None:
+def _append(record: dict) -> None:
     """追加一行 JSONL；目录按需创建，多请求并发安全。"""
     directory = log_dir()
     directory.mkdir(parents=True, exist_ok=True)
@@ -23,3 +23,11 @@ def log_guidance(record: dict) -> None:
     with _lock:
         with path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
+
+
+def log_guidance(record: dict) -> None:
+    _append(record)
+
+
+def log_tts(record: dict) -> None:
+    _append(record)

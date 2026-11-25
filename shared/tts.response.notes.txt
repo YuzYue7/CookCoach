@@ -1,0 +1,13 @@
+POST /api/v1/tts —— 语音朗读（可选增强，独立于 guidance 契约）
+
+请求：{"text": "..."}，UTF-8 JSON，1-500 字符（strip 后非空）。
+语音：微软 edge-tts 免费神经语音，默认 zh-CN-YunxiNeural（男声云希），
+      后端 .env 的 TTS_VOICE 可换，如女声 zh-CN-XiaoxiaoNeural。
+
+响应（正文为二进制，无法提供 JSON 样例，此文件即为契约说明）：
+- 200：Content-Type: audio/mpeg，X-TTS-Voice: <voice>，正文为 mp3。
+- 400：text 缺失/空白/超过 500 字符，body {"detail":"invalid request"}。
+- 502：合成失败（如外网不可达），body {"detail":"tts synthesis failed"}。
+- 503：TTS_ENABLED=false，body {"detail":"tts disabled"}。
+
+客户端约定：任何非 200 一律静默降级为纯文本，不提示用户。

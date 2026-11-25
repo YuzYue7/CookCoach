@@ -11,7 +11,7 @@
   <ui:VisualElement name="card">
    <ui:VisualElement class="horizontal head">
     <ui:VisualElement name="emblem" picking-mode="Ignore"/><ui:Label text="厨房导师" class="title"/><ui:Label name="origin" class="origin"/>
-    <ui:Button name="retry" style="display: none;" text="重试" class="textAction"/><ui:Button name="askToggle" text="提问" class="textAction"/><ui:Button name="fold" text="−" tooltip="收起导师" class="fold"/>
+    <ui:Button name="retry" style="display: none;" text="重试" class="textAction"/><ui:Button name="voiceToggle" text="语音：开" tooltip="开关语音朗读" class="textAction"/><ui:Button name="askToggle" text="提问" class="textAction"/><ui:Button name="fold" text="−" tooltip="收起导师" class="fold"/>
    </ui:VisualElement>
    <ui:Label name="hint" class="body" text="准备开始练习。"/>
    <ui:VisualElement name="actionSlot"/>

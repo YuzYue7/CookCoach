@@ -51,4 +51,9 @@ namespace CookCoach.Tutoring
         public int state_version;
         public Advice guidance;
     }
+
+    [Serializable] public class TtsRequest
+    {
+        public string text;
+    }
 }

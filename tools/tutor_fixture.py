@@ -29,6 +29,9 @@ class Fixture(BaseHTTPRequestHandler):
             self.respond(404, {})
 
     def do_POST(self):
+        if self.path == "/api/v1/tts":
+            # fixture 仅用标准库，无法真实合成；客户端对非 200 静默降级纯文本
+            return self.respond(501, {"detail": "tts not implemented in fixture"})
         if self.path != "/api/v1/guidance":
             return self.respond(404, {})
         size = int(self.headers.get("Content-Length", "0"))

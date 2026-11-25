@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UIElements;
@@ -42,6 +43,15 @@ namespace CookCoach.Tutoring
         KitchenContext context;
         Coroutine pending;
         UnityWebRequest http;
+        AudioSource voiceSource;
+        AudioClip voiceClip;
+        UnityWebRequest voiceHttp;
+        bool voiceMuted;
+        int voiceSeq;
+        Coroutine voicePending;
+
+        string TtsUrl => string.IsNullOrEmpty(endpoint) || !endpoint.Contains("/")
+            ? "" : endpoint.Substring(0, endpoint.LastIndexOf('/') + 1) + "tts";
         string latestId, lastQuestion, lastTrigger, lastDeliveredId;
         bool expanded;
         Font uiFont;
@@ -70,6 +80,15 @@ namespace CookCoach.Tutoring
             send=root.Q<Button>("send"); tip=root.Q<Button>("tip"); locate=root.Q<Button>("locate"); retry=root.Q<Button>("retry");
             askToggle=root.Q<Button>("askToggle");
             askToggle.clicked+=()=>{ if(IsWaiting) Cancel(); else SetAsking(!asking); };
+            voiceSource = gameObject.AddComponent<AudioSource>();
+            voiceSource.playOnAwake = false;
+            voiceSource.spatialBlend = 0f;
+            voiceMuted = PlayerPrefs.GetInt("tutorVoiceMuted", 0) == 1;
+            var voiceButton = root.Q<Button>("voiceToggle");
+            if (voiceButton != null) {
+                voiceButton.text = voiceMuted ? "语音：关" : "语音：开";
+                voiceButton.clicked += ToggleVoice;
+            }
             SetAsking(false);
             send.clicked += () => { if(IsWaiting) Cancel(); else SubmitTyped(); };
             tip.clicked += () => Ask("hint","");
@@ -215,10 +234,60 @@ namespace CookCoach.Tutoring
             StopPending();
             if (reveal) SetExpanded(true);
             message.text = text;
+            Speak(text);
             source.text = "练习提示";
             Show(retry, false);
             SetHighlight(target);
             Journal?.Add(context,"cue",text,source:"scene",target:ActiveHighlight); RenderTrace();
+        }
+
+        void ToggleVoice()
+        {
+            voiceMuted = !voiceMuted;
+            PlayerPrefs.SetInt("tutorVoiceMuted", voiceMuted ? 1 : 0);
+            var b = root.Q<Button>("voiceToggle");
+            if (b != null) b.text = voiceMuted ? "语音：关" : "语音：开";
+            if (voiceMuted) StopVoice();
+        }
+
+        // 朗读任意消息（仅 Http 模式且未静音）；任何失败静默降级纯文本。
+        public void Speak(string text)
+        {
+            if (voiceMuted || mode != TutorMode.Http || voiceSource == null ||
+                string.IsNullOrWhiteSpace(text) || string.IsNullOrEmpty(TtsUrl)) return;
+            StopVoice();
+            int seq = voiceSeq;
+            voicePending = StartCoroutine(FetchVoice(text, seq));
+        }
+
+        void StopVoice()
+        {
+            voiceSeq++;  // 使在途请求与播放作废，防止新旧语音重叠
+            if (voiceHttp != null) { voiceHttp.Abort(); voiceHttp = null; }
+            if (voiceSource != null) voiceSource.Stop();
+        }
+
+        IEnumerator FetchVoice(string text, int seq)
+        {
+            var req = UnityWebRequestMultimedia.GetAudioClip(TtsUrl, AudioType.MPEG);
+            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(
+                JsonUtility.ToJson(new TtsRequest { text = text })));
+            req.SetRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.timeout = 5;  // 后端合成约 1-2 秒
+            voiceHttp = req;
+            yield return req.SendWebRequest();
+            if (voiceHttp == req) voiceHttp = null;
+            if (seq != voiceSeq || req.result != UnityWebRequest.Result.Success) { req.Dispose(); yield break; }
+            var clip = DownloadHandlerAudioClip.GetContent(req);
+            req.Dispose();
+            if (clip == null || seq != voiceSeq) { if (clip != null) Destroy(clip); yield break; }
+            if (voiceClip != null) Destroy(voiceClip);  // 清理被中断的上一段遗留剪辑
+            voiceClip = clip;
+            voiceSource.clip = clip;
+            voiceSource.Play();
+            yield return new WaitUntil(() => voiceSource == null || !voiceSource.isPlaying);
+            if (voiceClip == clip) { voiceClip = null; voiceSource.clip = null; Destroy(clip); }
+            if (seq == voiceSeq) voicePending = null;
         }
 
         public void RegisterTarget(string id, Transform anchor, string label)
@@ -314,6 +383,7 @@ namespace CookCoach.Tutoring
             }
             SetBusy(false); pending=null;
             message.text=reply.guidance.message;
+            Speak(message.text);
             source.text=reply.source=="mock"?"模拟回复":reply.source=="fallback"?"备用提示":"模型指导";
             SetHighlight(Array.IndexOf(req.allowed_highlight_targets,reply.guidance.highlight_target_id)>=0 ? reply.guidance.highlight_target_id : "");
             string result=ActiveHighlight!=""?"已标记 "+ActiveHighlight:
@@ -367,7 +437,7 @@ namespace CookCoach.Tutoring
             SetBusy(false);
         }
         public void Cancel(){if(!IsWaiting)return; StopPending("用户取消");message.text="已取消，可以重新提问。";RenderTrace();}
-        void OnDisable(){StopPending();}
-        void OnDestroy(){if(uiFont!=null) Destroy(uiFont);}
+        void OnDisable(){StopPending(); StopVoice();}
+        void OnDestroy(){if(uiFont!=null) Destroy(uiFont); if(voiceClip!=null){ if(voiceSource!=null) voiceSource.clip=null; Destroy(voiceClip); voiceClip=null; }}
     }
 }

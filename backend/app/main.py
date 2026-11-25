@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from .routers import guidance, health
+from .routers import guidance, health, tts
 
 app = FastAPI(title="CookCoach Tutor", version="0.1.0")
 
@@ -20,3 +20,4 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
 
 app.include_router(health.router)
 app.include_router(guidance.router)
+app.include_router(tts.router)

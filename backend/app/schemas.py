@@ -11,7 +11,7 @@ highlight_target_id 只能取自本次请求的 allowed_highlight_targets，否�
 """
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Event(BaseModel):
@@ -73,3 +73,22 @@ class GuidanceResponse(BaseModel):
     source: Literal["llm", "fallback", "mock"]
     state_version: int
     guidance: Guidance
+
+
+class TtsRequest(BaseModel):
+    """POST /api/v1/tts 请求：{"text": "..."}，≤500 字符。
+
+    缺失/空白/超长由全局校验处理器转 400 {"detail": "invalid request"}。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    text: str = Field(min_length=1, max_length=500)
+
+    @field_validator("text")
+    @classmethod
+    def _strip_nonempty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("text must not be blank")
+        return v
