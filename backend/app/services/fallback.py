@@ -9,10 +9,27 @@
 最终 message = "句一。句二"（error 时）或仅句二；
 输出同样过 validate，source="fallback"，message 非空。
 """
-from ..schemas import GuidanceRequest
+from __future__ import annotations
 
-WHERE_SWITCH_TEXT = "看金色圆圈，点击它指向的炉灶旋钮。"
-DONE_TEXT = "菜已经做好了，可以关火装盘享用。"
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..schemas import GuidanceRequest
+
+DONE_TEXT = "本轮已完成，可以打开本轮回顾，查看做饭清单和操作记录。"
+
+# 只标记用户明确询问、且本轮 Unity 已登记的物体。
+TARGET_NAMES = {
+    "egg_bowl": ("蛋碗", "碗", "打蛋盆"),
+    "stove_switch": ("旋钮", "炉灶", "开关", "灶台开关"),
+    "plate": ("盘", "碟"),
+    "pan": ("锅",),
+    "tomato": ("番茄", "西红柿", "砧板", "案板"),
+}
+TARGET_LABELS = {
+    "egg_bowl": "蛋碗", "stove_switch": "炉灶旋钮", "plate": "上菜盘",
+    "pan": "平底锅", "tomato": "切番茄的砧板",
+}
 UNKNOWN_STEP_TEXT = "请查看当前步骤。"
 S4_FRIED_TEXT = "鸡蛋已经炒好盛出，把番茄倒入锅中翻炒。"
 
@@ -26,12 +43,11 @@ STEP_TEXTS = {
 }
 
 S6_PHASES = {
-    "return_cooked_egg": ("把盘里的熟鸡蛋拖回锅里，和番茄一起炒。", "plate"),
-    "stir_fry": ("按住锅内绕一圈，把熟蛋和番茄炒匀。", "pan"),
-    "turn_off_stove": ("食材已经炒匀，点炉灶旋钮关火。", "stove_switch"),
-    "finish_dish": ("炉火已关，把锅中的成菜装入空盘。", "plate"),
+    "return_cooked_egg": "把盘里的熟鸡蛋拖回锅里，和番茄一起炒。",
+    "stir_fry": "按住锅内绕一圈，把熟蛋和番茄炒匀。",
+    "turn_off_stove": "食材已经炒匀，点炉灶旋钮关火。",
+    "finish_dish": "炉火已关，把锅中的成菜装入空盘。",
 }
-S6_DEFAULT = ("请查看当前步骤。", "")
 
 ACTION_NAMES = {
     "cut_tomato": "切番茄",
@@ -51,29 +67,28 @@ REASON_TEXT = {
 }
 
 
-def _egg_already_fried(snap, events) -> bool:
+def _egg_already_fried(snap: dict, events: list) -> bool:
     """S4 是否已完成：completed_steps 含 S4，或最近有成功的炒蛋操作。"""
-    return "S4" in snap.completed_steps or any(
-        ev.action_id == "fry_egg" and ev.outcome == "ok" for ev in events
+    return "S4" in (snap.get("completed_steps") or []) or any(
+        ev.get("action_id") == "fry_egg" and ev.get("outcome") == "ok" for ev in events
     )
 
 
-def _step_text(snap, events) -> tuple[str, str]:
-    """句二「现在该做什么」+ 可高亮的物体编号。"""
-    step = snap.current_step
-    if step == "done":
-        return DONE_TEXT, ""
+def _step_text(snap: dict, events: list) -> str:
+    """句二「现在该做什么」。"""
+    step = snap.get("current_step")
+    stove_on = bool(snap.get("stove_on"))
     if step == "S6":
-        phase = snap.finish_phase or "return_cooked_egg"
-        return S6_PHASES.get(phase, S6_DEFAULT)
+        phase = snap.get("finish_phase") or "return_cooked_egg"
+        return S6_PHASES.get(phase, UNKNOWN_STEP_TEXT)
     text = STEP_TEXTS.get(step)
     if text is None:
-        return UNKNOWN_STEP_TEXT, ""
+        return UNKNOWN_STEP_TEXT
     if isinstance(text, dict):
-        text = text[snap.stove_on]
-    if step == "S4" and snap.stove_on and _egg_already_fried(snap, events):
+        text = text[stove_on]
+    if step == "S4" and stove_on and _egg_already_fried(snap, events):
         text = S4_FRIED_TEXT
-    return text, ""
+    return text
 
 
 def _error_sentence(events) -> str:
@@ -81,36 +96,49 @@ def _error_sentence(events) -> str:
     if not events:
         return ""
     attempt = events[-1]
-    if attempt.outcome != "blocked":
+    if attempt.get("outcome") != "blocked":
         return ""
-    name = ACTION_NAMES.get(attempt.action_id)
+    name = ACTION_NAMES.get(attempt.get("action_id"))
     if not name:
         return ""
-    if attempt.reason == "already_done":
+    if attempt.get("reason") == "already_done":
         return f"刚才{name}已经完成，不用重复。"
-    reason = REASON_TEXT.get(attempt.reason)
+    reason = REASON_TEXT.get(attempt.get("reason"))
     return f"刚才{name}没执行：{reason}。" if reason else f"刚才{name}没执行。"
 
 
-def fallback_guidance(req: GuidanceRequest) -> dict:
-    snap = req.snapshot
-    question = req.user_question or ""
-    allowed = req.allowed_highlight_targets
+def _location_guidance(question: str, allowed: list) -> tuple[str, str]:
+    matches = [target for target, names in TARGET_NAMES.items()
+               if any(name in question for name in names)]
+    if len(matches) != 1:
+        return "你想找哪件道具？可以直接问我蛋碗、砧板、锅、盘子或炉灶旋钮的位置。", ""
+    target = matches[0]
+    label = TARGET_LABELS[target]
+    if target not in allowed:
+        return f"当前场景无法标记{label}。", ""
+    return f"看金色圆圈，标出的位置就是{label}。", target
+
+
+def offline_guidance(req: dict) -> dict:
+    """供 FastAPI 和无第三方依赖的本地模拟服务共用。"""
+    snap = req.get("snapshot") or {}
+    events = req.get("recent_events") or []
+    question = req.get("user_question") or ""
     target = ""
-    text, focus = _step_text(snap, req.recent_events)
-    # 玩家问「哪里」：句二替换为位置提示，并在允许时高亮。
-    if "哪里" in question:
-        if snap.current_step == "S6" and focus in allowed:
-            target = focus
-        elif not snap.stove_on and "stove_switch" in allowed:
-            text, target = WHERE_SWITCH_TEXT, "stove_switch"
-    # trigger=error：句一（刚才为什么没执行）+ 句二（现在该做什么）。
-    if req.trigger == "error":
-        first = _error_sentence(req.recent_events)
-        if first:
-            text = first + text
+    if snap.get("current_step") == "done":
+        text = DONE_TEXT
+    elif any(word in question for word in ("在哪", "哪里", "哪儿", "哪边", "位置", "找不到")):
+        text, target = _location_guidance(question, req.get("allowed_highlight_targets") or [])
+    else:
+        text = _step_text(snap, events)
+        if req.get("trigger") == "error":
+            text = _error_sentence(events) + text
     return {
         "message": text,
         "hint_level": "direct" if target else "check",
         "highlight_target_id": target,
     }
+
+
+def fallback_guidance(req: GuidanceRequest) -> dict:
+    return offline_guidance(req.model_dump())

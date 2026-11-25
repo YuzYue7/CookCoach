@@ -3,6 +3,8 @@
 决策顺序：先看 current_step（句二「现在该做什么」），
 再看最近一条受阻事件（句一「刚才为什么没执行」）。
 """
+import pytest
+
 from app.schemas import Event, GuidanceRequest, Snapshot
 from app.services import fallback
 
@@ -100,10 +102,30 @@ def test_s6_phases():
         assert g["message"].strip()
 
 
-def test_done_step_greets():
-    req = _req(snapshot=Snapshot(current_step="done"))
+@pytest.mark.parametrize("question", ["本轮记录在哪里？", "需要加盐吗？"])
+def test_finished_lesson_returns_review_without_highlight(question):
+    req = _req(snapshot=Snapshot(current_step="done", stove_on=False),
+               user_question=question, allowed_highlight_targets=["plate", "stove_switch"])
     g = fallback.fallback_guidance(req)
-    assert g["message"].strip()
+    assert "已完成" in g["message"] and "回顾" in g["message"]
+    assert all(word not in g["message"] for word in ("关火", "开火", "装盘"))
+    assert g["highlight_target_id"] == ""
+
+
+@pytest.mark.parametrize("step,question,allowed,target,word", [
+    ("S2", "蛋碗在哪里？", ["egg_bowl", "stove_switch"], "egg_bowl", "蛋碗"),
+    ("S6", "平底锅在哪儿？", ["pan", "plate"], "pan", "平底锅"),
+    ("S2", "找不到蛋碗", ["stove_switch"], "", "无法标记"),
+    ("S2", "盐在哪里？", ["stove_switch", "pan"], "", "哪件道具"),
+    ("S3", "锅和开关在哪里？", ["stove_switch", "pan"], "", "哪件道具"),
+])
+def test_location_uses_the_requested_and_registered_object(step, question, allowed, target, word):
+    req = _req(snapshot=Snapshot(current_step=step, stove_on=False),
+               user_question=question, allowed_highlight_targets=allowed)
+    g = fallback.fallback_guidance(req)
+    assert g["highlight_target_id"] == target
+    assert word in g["message"]
+    assert g["hint_level"] == ("direct" if target else "check")
 
 
 def test_unknown_step_safe_text():
