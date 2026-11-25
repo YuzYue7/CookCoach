@@ -10,7 +10,7 @@ TTS_MAX_CHARS(默认 500)。
 """
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     # 语音朗读（微软 edge-tts，免费无密钥；失败时客户端自动降级为纯文本）
     tts_enabled: bool = True
     tts_voice: str = "zh-CN-YunxiNeural"
-    tts_max_chars: int = 500
+    tts_max_chars: int = Field(default=500, ge=1, le=500)
 
     @field_validator("deepseek_api_key")
     @classmethod

@@ -20,7 +20,8 @@ def _post(text="先点炉灶旋钮开火。"):
     return client.post("/api/v1/tts", json={"text": text})
 
 
-def test_success_returns_audio_mpeg(monkeypatch):
+def test_success_returns_audio_mpeg(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "tutor_log_dir", str(tmp_path))
     async def fake(text, voice):
         assert text == "先点炉灶旋钮开火。"
         assert voice == settings.tts_voice
@@ -31,6 +32,8 @@ def test_success_returns_audio_mpeg(monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("audio/mpeg")
     assert response.content == FAKE_MP3
+    assert len(list(tmp_path.glob("tts-*.jsonl"))) == 1
+    assert not list(tmp_path.glob("tutor-*.jsonl"))
 
 
 def test_missing_text_is_400():
@@ -43,6 +46,11 @@ def test_blank_text_is_400():
 
 def test_too_long_text_is_400():
     assert _post("长" * 501).status_code == 400
+
+
+def test_configured_length_limit_is_400(monkeypatch):
+    monkeypatch.setattr(settings, "tts_max_chars", 10)
+    assert _post("长" * 11).status_code == 400
 
 
 def test_disabled_returns_503(monkeypatch):

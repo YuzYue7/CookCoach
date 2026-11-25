@@ -43,7 +43,7 @@ Label { margin:0; padding:0; }
 #export {margin-top:8px;align-self:flex-start;}
 #exportStatus {font-size:12px;}
 #card { width:378px; border-top-width:1px; border-top-color:#c4b59c; border-left-width:4px; border-left-color:#a8583d; }
-.head { border-bottom-width:0; padding-bottom:0; }
+.head { border-bottom-width:0; padding-bottom:0; flex-wrap:wrap; }
 .title {font-size:18px;}
 .origin {margin-left:8px;font-size:12px;}
 .body {font-size:20px;min-height:0;margin-top:8px;}

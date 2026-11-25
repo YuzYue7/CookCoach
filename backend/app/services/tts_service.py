@@ -4,7 +4,6 @@
 保持同一签名 synthesize(text, voice) -> bytes；路由、契约与 Unity 客户端都不动。
 失败向上抛，由路由转 502，客户端静默降级为纯文本。
 """
-import time
 from collections import OrderedDict
 
 from ..config import settings
@@ -29,7 +28,6 @@ async def synthesize(text: str, voice: str) -> bytes:
 
     import edge_tts  # 惰性导入：包缺失不影响 guidance 主链路
 
-    started = time.perf_counter()
     communicate = edge_tts.Communicate(text, voice)
     parts = []
     async for chunk in communicate.stream():

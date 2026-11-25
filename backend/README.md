@@ -1,6 +1,6 @@
 # CookCoach 导师后端（backend/）
 
-FastAPI 服务：`GET /health`、`POST /api/v1/guidance`。契约、验收与分工见
+FastAPI 服务提供健康检查、导师指导和语音合成。契约、验收与分工见
 `../shared/*.example.json`、`../docs/组员联调交接.md`、`../docs/后端问题定义.md`。
 
 ## 本地启动（Windows）
@@ -19,6 +19,7 @@ FastAPI 服务：`GET /health`、`POST /api/v1/guidance`。契约、验收与分
 |---|---|
 | GET /health | 检查服务是否启动，返回 `{"status":"ok"}`（不含模型可用性） |
 | POST /api/v1/guidance | 导师接口；请求/回复格式照 `../shared/` 两份样例 |
+| POST /api/v1/tts | 接收提示文本并返回 MP3。可用 `TTS_ENABLED` 关闭合成，或用 `TTS_VOICE` 指定声音。请求样例和响应约定见 `../shared/tts.*`。 |
 
 ## 关键约束（实现前必读，摘自 docs/后端问题定义.md）
 

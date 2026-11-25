@@ -14,11 +14,11 @@ from .config import log_dir
 _lock = threading.Lock()
 
 
-def _append(record: dict) -> None:
+def _append(record: dict, prefix: str) -> None:
     """追加一行 JSONL；目录按需创建，多请求并发安全。"""
     directory = log_dir()
     directory.mkdir(parents=True, exist_ok=True)
-    path: Path = directory / f"tutor-{datetime.date.today():%Y%m%d}.jsonl"
+    path: Path = directory / f"{prefix}-{datetime.date.today():%Y%m%d}.jsonl"
     line = json.dumps(record, ensure_ascii=False, default=str)
     with _lock:
         with path.open("a", encoding="utf-8") as f:
@@ -26,8 +26,8 @@ def _append(record: dict) -> None:
 
 
 def log_guidance(record: dict) -> None:
-    _append(record)
+    _append(record, "tutor")
 
 
 def log_tts(record: dict) -> None:
-    _append(record)
+    _append(record, "tts")

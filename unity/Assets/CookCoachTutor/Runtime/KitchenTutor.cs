@@ -47,11 +47,8 @@ namespace CookCoach.Tutoring
         AudioClip voiceClip;
         UnityWebRequest voiceHttp;
         bool voiceMuted;
-        int voiceSeq;
         Coroutine voicePending;
-
-        string TtsUrl => string.IsNullOrEmpty(endpoint) || !endpoint.Contains("/")
-            ? "" : endpoint.Substring(0, endpoint.LastIndexOf('/') + 1) + "tts";
+        Button voiceButton;
         string latestId, lastQuestion, lastTrigger, lastDeliveredId;
         bool expanded;
         Font uiFont;
@@ -84,7 +81,7 @@ namespace CookCoach.Tutoring
             voiceSource.playOnAwake = false;
             voiceSource.spatialBlend = 0f;
             voiceMuted = PlayerPrefs.GetInt("tutorVoiceMuted", 0) == 1;
-            var voiceButton = root.Q<Button>("voiceToggle");
+            voiceButton = root.Q<Button>("voiceToggle");
             if (voiceButton != null) {
                 voiceButton.text = voiceMuted ? "语音：关" : "语音：开";
                 voiceButton.clicked += ToggleVoice;
@@ -151,6 +148,7 @@ namespace CookCoach.Tutoring
             if (retiredSessions.Contains(next.session_id) ||
                 (!fresh && next.state_version <= context.state_version)) return;
             bool wasComplete = context != null && TomatoEggLesson.Complete(context);
+            StopVoice();
             StopPending("状态已更新"); SetHighlight("");
             if (fresh) {
                 if(context != null) retiredSessions.Add(context.session_id);
@@ -245,49 +243,51 @@ namespace CookCoach.Tutoring
         {
             voiceMuted = !voiceMuted;
             PlayerPrefs.SetInt("tutorVoiceMuted", voiceMuted ? 1 : 0);
-            var b = root.Q<Button>("voiceToggle");
-            if (b != null) b.text = voiceMuted ? "语音：关" : "语音：开";
+            voiceButton.text = voiceMuted ? "语音：关" : "语音：开";
             if (voiceMuted) StopVoice();
         }
 
         // 朗读任意消息（仅 Http 模式且未静音）；任何失败静默降级纯文本。
         public void Speak(string text)
         {
-            if (voiceMuted || mode != TutorMode.Http || voiceSource == null ||
-                string.IsNullOrWhiteSpace(text) || string.IsNullOrEmpty(TtsUrl)) return;
             StopVoice();
-            int seq = voiceSeq;
-            voicePending = StartCoroutine(FetchVoice(text, seq));
+            if (voiceMuted || mode != TutorMode.Http || voiceSource == null || string.IsNullOrWhiteSpace(text)) return;
+            if (!Uri.TryCreate(endpoint?.TrimEnd('/'), UriKind.Absolute, out var guidanceUrl) ||
+                (guidanceUrl.Scheme != Uri.UriSchemeHttp && guidanceUrl.Scheme != Uri.UriSchemeHttps)) return;
+            voicePending = StartCoroutine(FetchVoice(text, new Uri(guidanceUrl, "tts").AbsoluteUri));
         }
 
         void StopVoice()
         {
-            voiceSeq++;  // 使在途请求与播放作废，防止新旧语音重叠
-            if (voiceHttp != null) { voiceHttp.Abort(); voiceHttp = null; }
-            if (voiceSource != null) voiceSource.Stop();
+            if (voicePending != null) { StopCoroutine(voicePending); voicePending = null; }
+            if (voiceHttp != null) { voiceHttp.Abort(); voiceHttp.Dispose(); voiceHttp = null; }
+            if (voiceSource != null) { voiceSource.Stop(); voiceSource.clip = null; }
+            if (voiceClip != null) { Destroy(voiceClip); voiceClip = null; }
         }
 
-        IEnumerator FetchVoice(string text, int seq)
+        IEnumerator FetchVoice(string text, string url)
         {
-            var req = UnityWebRequestMultimedia.GetAudioClip(TtsUrl, AudioType.MPEG);
+            var req = UnityWebRequestMultimedia.GetAudioClip(url, AudioType.MPEG);
+            req.method = UnityWebRequest.kHttpVerbPOST;
             req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(
                 JsonUtility.ToJson(new TtsRequest { text = text })));
             req.SetRequestHeader("Content-Type", "application/json; charset=utf-8");
-            req.timeout = 5;  // 后端合成约 1-2 秒
+            req.timeout = 12;
             voiceHttp = req;
             yield return req.SendWebRequest();
-            if (voiceHttp == req) voiceHttp = null;
-            if (seq != voiceSeq || req.result != UnityWebRequest.Result.Success) { req.Dispose(); yield break; }
-            var clip = DownloadHandlerAudioClip.GetContent(req);
+            voiceHttp = null;
+            var clip = req.result == UnityWebRequest.Result.Success
+                ? DownloadHandlerAudioClip.GetContent(req) : null;
             req.Dispose();
-            if (clip == null || seq != voiceSeq) { if (clip != null) Destroy(clip); yield break; }
-            if (voiceClip != null) Destroy(voiceClip);  // 清理被中断的上一段遗留剪辑
+            if (clip == null) { voicePending = null; yield break; }
             voiceClip = clip;
             voiceSource.clip = clip;
             voiceSource.Play();
             yield return new WaitUntil(() => voiceSource == null || !voiceSource.isPlaying);
-            if (voiceClip == clip) { voiceClip = null; voiceSource.clip = null; Destroy(clip); }
-            if (seq == voiceSeq) voicePending = null;
+            voiceSource.clip = null;
+            Destroy(clip);
+            voiceClip = null;
+            voicePending = null;
         }
 
         public void RegisterTarget(string id, Transform anchor, string label)
@@ -305,6 +305,10 @@ namespace CookCoach.Tutoring
         }
         void LateUpdate()
         {
+            if (voiceButton != null) {
+                var display = mode == TutorMode.Http ? DisplayStyle.Flex : DisplayStyle.None;
+                if (voiceButton.style.display.value != display) voiceButton.style.display = display;
+            }
             if(marker==null || ActiveHighlight=="") return;
             if(!targets.TryGetValue(ActiveHighlight,out var t)||t.anchor==null || !t.anchor.gameObject.activeInHierarchy){SetHighlight("");return;}
             var cam=Camera.main;
@@ -334,6 +338,7 @@ namespace CookCoach.Tutoring
         void BeginRequest(string trigger,string text,bool retrying)
         {
             if(context==null || card==null || IsWaiting) return;
+            StopVoice();
             SetExpanded(true);Show(retry,false);SetHighlight("");
             lastTrigger=trigger;lastQuestion=text??"";
             latestId=Guid.NewGuid().ToString("N");
