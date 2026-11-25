@@ -14,6 +14,7 @@ namespace CookCoach.Tutoring
         public GameObject flame;
         [Min(0.1f)] public float reminderSeconds = 5f;
         public GameObject workbenchPrefab;
+        [SerializeField] Transform oliveOilBody, oliveOilCap;
         [Tooltip("可选：实现 IKitchenWorkflow 的正式流程组件")]
         public MonoBehaviour workflow;
         IKitchenWorkflow Rules => workflow as IKitchenWorkflow;
@@ -66,9 +67,9 @@ namespace CookCoach.Tutoring
             sampleCameraRotation=lessonCamera.transform.rotation;
             sampleField=lessonCamera.fieldOfView;
             var props=Instantiate(workbenchPrefab,transform);
-            workbench=new KitchenWorkbench(props,pan,knob,flame,tutor);
+            workbench=new KitchenWorkbench(props,pan,knob,flame,tutor,oliveOilBody,oliveOilCap);
             walk=new KitchenWalk(lessonCamera,walkableFloor);
-            hands=new CookingHands(workbench,props.transform,pan,lessonCamera,SubmitFromHands,SubmitFinish);
+            hands=new CookingHands(workbench,props.transform,pan,lessonCamera,SubmitFromHands,SubmitFinish,SubmitSeason);
             walkHints=new Label {name="walkHints",pickingMode=PickingMode.Ignore};
             hud.Add(walkHints);
             tutor.ContextChanged+=hands.Sync;
@@ -284,6 +285,12 @@ namespace CookCoach.Tutoring
             else Rules.Attempt(TomatoEggLesson.Actions[step],TomatoEggLesson.Targets[step],tutor);
         }
 
+        void SubmitSeason(string action)
+        {
+            if(workflow==null) Rehearsal.TrySeason(action);
+            else Rules.Attempt(action,action==TomatoEggLesson.Oil?TomatoEggLesson.OilBottle:TomatoEggLesson.SaltShaker,tutor);
+        }
+
         void SubmitFinish(string action)
         {
             if(workflow==null) Rehearsal.TryFinish(action);
@@ -305,8 +312,9 @@ namespace CookCoach.Tutoring
             string id=workbench.Pick(lessonCamera.ScreenPointToRay(screen),!hands.Equipped);
             string verb=hands.Verb(id);
             hands.Pointer(id,screen,input);
-            if(!hands.Busy && input==HandInput.Hover && verb.Length>0 && tutor.ActiveHighlight!=id) {
-                hover.text=verb;
+            string dropCue=hands.SeasoningDropCue;
+            if(dropCue.Length>0 || !hands.Busy && input==HandInput.Hover && verb.Length>0 && tutor.ActiveHighlight!=id) {
+                hover.text=dropCue.Length>0?dropCue:verb;
                 hover.style.left=Mathf.Clamp(point.x+15,0,Mathf.Max(0,panel.visualTree.layout.width-168));
                 hover.style.top=Mathf.Clamp(point.y+14,0,Mathf.Max(0,panel.visualTree.layout.height-38));
                 hover.style.display=DisplayStyle.Flex;

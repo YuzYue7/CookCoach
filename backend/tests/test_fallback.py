@@ -116,7 +116,7 @@ def test_finished_lesson_returns_review_without_highlight(question):
     ("S2", "蛋碗在哪里？", ["egg_bowl", "stove_switch"], "egg_bowl", "蛋碗"),
     ("S6", "平底锅在哪儿？", ["pan", "plate"], "pan", "平底锅"),
     ("S2", "找不到蛋碗", ["stove_switch"], "", "无法标记"),
-    ("S2", "盐在哪里？", ["stove_switch", "pan"], "", "哪件道具"),
+    ("S2", "计时器在哪里？", ["stove_switch", "pan"], "", "哪件道具"),
     ("S3", "锅和开关在哪里？", ["stove_switch", "pan"], "", "哪件道具"),
 ])
 def test_location_uses_the_requested_and_registered_object(step, question, allowed, target, word):
@@ -190,3 +190,22 @@ def test_question_trigger_has_no_error_prefix():
     )
     g = fallback.fallback_guidance(req)
     assert not g["message"].startswith("刚才")
+
+
+@pytest.mark.parametrize("step,on,phase,oil,salt,question,words,target", [
+    ("S4", True, "", False, False, "我倒油了吗？", ("还没倒油", "先把食用油瓶"), ""),
+    ("S4", True, "", True, False, "现在呢？", ("倒入蛋液",), ""),
+    ("S4", True, "", False, False, "油瓶在哪？", ("油瓶",), "oil_bottle"),
+    ("S6", True, "stir_fry", True, False, "需要加盐吗？", ("可选", "直接绕圈"), ""),
+    ("S6", True, "stir_fry", True, True, "盐放过了吗？", ("已撒盐", "炒匀"), ""),
+    ("S6", True, "stir_fry", True, False, "盐罐在哪里？", ("盐罐",), "salt_shaker"),
+    ("done", False, "", True, False, "我加盐了吗？", ("未撒盐", "回顾"), ""),
+])
+def test_seasoning_snapshot(step,on,phase,oil,salt,question,words,target):
+    req = _req(recipe_version="2", user_question=question,
+               allowed_highlight_targets=["oil_bottle", "salt_shaker", "stove_switch"],
+               snapshot=Snapshot(current_step=step, stove_on=on, finish_phase=phase,
+                                 oil_added=oil, salt_added=salt))
+    guidance = fallback.fallback_guidance(req)
+    assert all(word in guidance["message"] for word in words)
+    assert guidance["highlight_target_id"] == target

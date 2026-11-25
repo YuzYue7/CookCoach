@@ -35,6 +35,8 @@ class Snapshot(BaseModel):
 
     completed_steps: list[str] = Field(default_factory=list)
     stove_on: bool = False
+    oil_added: Optional[bool] = None
+    salt_added: Optional[bool] = None
     related_error_count: int = 0
     current_step: str = ""
     current_step_title: str = ""

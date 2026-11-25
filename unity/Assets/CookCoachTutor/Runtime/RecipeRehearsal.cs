@@ -20,7 +20,8 @@ namespace CookCoach.Tutoring
         bool menuOpen;
         string session;
         int version, errors;
-        bool on;
+        bool on, oilAdded, saltAdded;
+        readonly Button oilButton, saltButton;
         int finishIndex;
         public bool Active { get; private set; }
 
@@ -32,7 +33,9 @@ namespace CookCoach.Tutoring
             var row=new VisualElement();row.AddToClassList("horizontal");controls.Add(row);
             primary=new Button(()=>{
                 int step=NextStep();
-                if(step<0) Start(); else TryStep(step);
+                if(step<0) Start();
+                else if(step==3 && !oilAdded) TrySeason(TomatoEggLesson.Oil);
+                else TryStep(step);
             }) {name="nextAction"};
             more=new Button(()=>SetMenu(!menuOpen)) {name="otherActions",text="其他动作"};
             more.AddToClassList("textAction");
@@ -43,6 +46,9 @@ namespace CookCoach.Tutoring
                 var button=new Button(()=>TryStep(index)){text=TomatoEggLesson.Titles[i]};
                 button.AddToClassList("alternate");actions.Add(button);stepButtons.Add(button);
             }
+            oilButton=new Button(()=>TrySeason(TomatoEggLesson.Oil)){text="倒油"};
+            saltButton=new Button(()=>TrySeason(TomatoEggLesson.Salt)){text="撒盐（可选）"};
+            actions.Add(oilButton);actions.Add(saltButton);
             var reset=new Button(Start){text="重新开始"};reset.AddToClassList("alternate");actions.Add(reset);
             tutor.WaitingChanged+=OnWaiting;
             Close();
@@ -54,12 +60,12 @@ namespace CookCoach.Tutoring
         {
             sceneInput=useSceneObjects;
             Active=true; tutor.InputSource=sceneInput ? "desktop_objects_local_rules" : "simulated_actions";
-            completed.Clear(); recent.Clear(); errors=0; version=0; on=false; finishIndex=0;
+            completed.Clear(); recent.Clear(); errors=0; version=0; on=false; oilAdded=false; saltAdded=false; finishIndex=0;
             session=Guid.NewGuid().ToString("N"); showFlame(false);
             controls.style.display=sceneInput ? DisplayStyle.None : DisplayStyle.Flex;
             SetMenu(false);
             tutor.SetContext(Context());
-            tutor.ShowSceneCue(sceneInput?"先拿砧板上的刀，点番茄切三下。也可以先按住碗沿，绕圈打蛋。":"锅和油已备好。先切番茄或打散鸡蛋。");
+            tutor.ShowSceneCue(sceneInput?"先拿砧板上的刀，点番茄切三下。也可以先按住碗沿，绕圈打蛋。":"先切番茄或打散鸡蛋，开火后倒油。");
             OnWaiting(false);
         }
 
@@ -81,6 +87,9 @@ namespace CookCoach.Tutoring
             if(!Active) return;
             int next=NextStep();
             primary.text=next<0?"再练一次":"模拟"+(next==5?TomatoEggLesson.ActionName(TomatoEggLesson.FinishActions[finishIndex]):TomatoEggLesson.Titles[next]);
+            if(next==3 && !oilAdded) primary.text="模拟倒油";
+            oilButton.SetEnabled(!busy && !oilAdded);
+            saltButton.SetEnabled(!busy && !saltAdded);
             primary.SetEnabled(!busy);
             more.style.display=next<0?DisplayStyle.None:DisplayStyle.Flex;
             for(int i=0;i<stepButtons.Count;i++) {
@@ -103,9 +112,25 @@ namespace CookCoach.Tutoring
             if(i==3 && !on) reason="stove_off";
             else if(i>=2 && !(completed.Contains("S1") && completed.Contains("S2"))) reason="prep_incomplete";
             else if(i>=3 && !completed.Contains(TomatoEggLesson.Ids[i-1])) reason="previous_step";
+            else if(i==3 && !oilAdded) reason="oil_missing";
             bool ok=reason.Length==0;
             if(ok) {completed.Add(id); if(i==2)on=true; showFlame(on);}
             Publish(TomatoEggLesson.Actions[i],TomatoEggLesson.Targets[i],reason);
+        }
+
+        public void TrySeason(string action)
+        {
+            if(!Active || tutor.IsWaiting || completed.Contains("S6")) return;
+            bool oil=action==TomatoEggLesson.Oil;
+            if(!oil && action!=TomatoEggLesson.Salt) return;
+            string reason="";
+            if(oil ? oilAdded : saltAdded) reason="already_done";
+            else if(oil && (!on || NextStep()!=3)) reason="oil_window";
+            else if(!oil && (!on || NextStep()!=5 || TomatoEggLesson.FinishActions[finishIndex]!=TomatoEggLesson.Mix)) reason="salt_window";
+            if(reason.Length==0) {
+                if(oil) oilAdded=true; else saltAdded=true;
+            }
+            Publish(action,oil?TomatoEggLesson.OilBottle:TomatoEggLesson.SaltShaker,reason);
         }
 
         public void TryFinish(string action)
@@ -132,7 +157,10 @@ namespace CookCoach.Tutoring
             var next=Context();
             tutor.ReportAction(next,ev);
             if(ok) tutor.ShowSceneCue(completed.Count==6?"已关火装盘。可以打开本轮回顾，带走做饭清单。":
-                (next.snapshot.current_step=="S6" ? TomatoEggLesson.FinishCue(next.snapshot.finish_phase) : sceneInput ? NextGesture(next.snapshot.current_step) : TomatoEggLesson.ActionName(action)+"已完成。接下来可以"+next.snapshot.current_step_title+"。"),reveal:false);
+                (next.snapshot.current_step=="S4" && !oilAdded ? "火已开。把台面右侧的黑色橄榄油瓶拖到锅里倒油，再倒蛋液。" :
+                action==TomatoEggLesson.Oil ? "油已倒好，把蛋碗拖到锅上倒入蛋液。" :
+                next.snapshot.finish_phase==TomatoEggLesson.Mix ? (saltAdded?"盐已撒好。按住锅内绕圈合炒。":"熟蛋已回锅。可把油瓶旁的白色盐罐拖到锅里撒盐，或直接绕圈合炒。") :
+                next.snapshot.current_step=="S6" ? TomatoEggLesson.FinishCue(next.snapshot.finish_phase) : sceneInput ? NextGesture(next.snapshot.current_step) : TomatoEggLesson.ActionName(action)+"已完成。接下来可以"+next.snapshot.current_step_title+"。"),reveal:false);
             OnWaiting(tutor.IsWaiting);
         }
 
@@ -151,10 +179,10 @@ namespace CookCoach.Tutoring
         KitchenContext Context()
         {
             int next=NextStep();
-            return new KitchenContext {session_id=session,recipe_id="tomato_egg",recipe_version="1",recipe_title="番茄炒蛋",
+            return new KitchenContext {session_id=session,recipe_id="tomato_egg",recipe_version="2",recipe_title="番茄炒蛋",
                 state_version=version,recent_events=recent.ToArray(),snapshot=new KitchenSnapshot {
-                    completed_steps=TomatoEggLesson.Ids.Where(completed.Contains).ToArray(),stove_on=on,related_error_count=errors,
-                    current_step=next<0?"done":TomatoEggLesson.Ids[next],current_step_title=next<0?"练习完成":next==5?TomatoEggLesson.ActionName(TomatoEggLesson.FinishActions[finishIndex]):TomatoEggLesson.Titles[next],
+                    completed_steps=TomatoEggLesson.Ids.Where(completed.Contains).ToArray(),stove_on=on,oil_added=oilAdded,salt_added=saltAdded,related_error_count=errors,
+                    current_step=next<0?"done":TomatoEggLesson.Ids[next],current_step_title=next<0?"练习完成":next==3 && !oilAdded?"倒油后炒蛋":next==5?TomatoEggLesson.ActionName(TomatoEggLesson.FinishActions[finishIndex]):TomatoEggLesson.Titles[next],
                     finish_phase=next==5?TomatoEggLesson.FinishActions[finishIndex]:"",
                     step_number=next<0?6:next+1,step_count=6}};
         }

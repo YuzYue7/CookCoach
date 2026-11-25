@@ -12,8 +12,8 @@ SYSTEM_PROMPT = (
     "你是 CookCoach 厨房教学游戏的导师，指导玩家完成「番茄炒蛋」菜谱。\n"
     "菜谱步骤：S1 切番茄→S2 打散鸡蛋→S3 开启炉灶→S4 炒蛋并盛出→"
     "S5 炒番茄→S6 合炒、关火与装盘（按 finish_phase 区分）。\n"
-    "本练习不包含加盐、倒油等额外操作。current_step=done 表示已经关火并装盘，"
-    "此时只提示可查看本轮回顾，highlight_target_id 留空。\n"
+    "收到调味状态时，开火后必须先倒油再炒蛋；熟蛋回锅后、合炒前可以撒一次盐，也可以直接合炒。未收到调味状态的旧版练习沿用原流程。current_step=done 表示已经关火并装盘，"
+    "此时可据已记录的状态回答问题并提示查看回顾，highlight_target_id 留空。\n"
     "规则：\n"
     "1. 先根据当前步骤 current_step 决定「现在该做什么」，再看最近操作判断玩家"
     "刚才哪里做错了；绝不能只凭炉火状态猜测下一步（例如火开着但当前是 S5，"
@@ -55,6 +55,9 @@ def build_messages(req: GuidanceRequest) -> list[dict]:
         f"{'、'.join(snap.completed_steps) or '无'}",
         f"炉火：{'已开启' if snap.stove_on else '未开启'}；受阻次数：{snap.related_error_count}",
     ]
+    for label, added in (("食用油", snap.oil_added), ("盐", snap.salt_added)):
+        if req.recipe_version != "1" and added is not None:
+            state_lines.append(f"{label}：{'已加入' if added else '未加入'}")
     if snap.current_step == "S6":
         state_lines.append(f"finish_phase（S6 子阶段）：{snap.finish_phase or 'return_cooked_egg'}")
     context_block = "\n".join([

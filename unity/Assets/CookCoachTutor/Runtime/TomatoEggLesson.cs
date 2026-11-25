@@ -11,9 +11,11 @@ namespace CookCoach.Tutoring
         public static readonly string[] Actions = { "cut_tomato", "beat_egg", "turn_on_stove", "fry_egg", "fry_tomato", "finish_dish" };
         public static readonly string[] Titles = { "切番茄", "打散鸡蛋", "开启炉灶", "炒蛋并盛出", "炒番茄", "合炒、关火与装盘" };
         public static readonly string[] Instructions = {
-            "将番茄切块，放在一旁备用。", "将鸡蛋打入碗中，搅打均匀。", "确认锅和油已准备好，打开炉灶。",
-            "倒入蛋液，炒至凝固后盛出。", "将番茄倒入锅中，翻炒至出汁。", "把鸡蛋倒回锅里合炒，关火后装盘。"
+            "将番茄切块，放在一旁备用。", "将鸡蛋打入碗中，搅打均匀。", "备料后打开炉灶。",
+            "先倒油，再倒入蛋液炒熟盛出。", "将番茄倒入锅中，翻炒至出汁。", "把鸡蛋倒回锅中，可撒盐调味，再合炒、关火并装盘。"
         };
+        public const string Oil = "add_oil", Salt = "add_salt";
+        public const string OilBottle = "oil_bottle", SaltShaker = "salt_shaker";
         public const string ReturnEgg = "return_cooked_egg", Mix = "stir_fry", HeatOff = "turn_off_stove", Serve = "finish_dish";
         public static readonly string[] FinishActions = { ReturnEgg, Mix, HeatOff, Serve };
 
@@ -54,6 +56,8 @@ namespace CookCoach.Tutoring
         public static string ActionName(string id)
         {
             switch(id) {
+                case Oil: return "倒油";
+                case Salt: return "撒盐";
                 case ReturnEgg: return "熟蛋回锅";
                 case Mix: return "锅中合炒";
                 case HeatOff: return "关闭炉火";
@@ -66,6 +70,9 @@ namespace CookCoach.Tutoring
         public static string ReasonName(string id)
         {
             switch (id) {
+                case "oil_missing": return "锅里尚未倒油";
+                case "salt_window": return "应在熟蛋回锅后、合炒前撒盐";
+                case "oil_window": return "应在开火后、炒蛋前倒油";
                 case "stove_off": return "炉灶未开启";
                 case "prep_incomplete": return "备料尚未完成";
                 case "previous_step": return "前一步尚未完成";

@@ -20,6 +20,8 @@ DONE_TEXT = "本轮已完成，可以打开本轮回顾，查看做饭清单和�
 
 # 只标记用户明确询问、且本轮 Unity 已登记的物体。
 TARGET_NAMES = {
+    "oil_bottle": ("油瓶", "食用油", "油壶", "倒油"),
+    "salt_shaker": ("盐罐", "盐瓶", "盐"),
     "egg_bowl": ("蛋碗", "碗", "打蛋盆"),
     "stove_switch": ("旋钮", "炉灶", "开关", "灶台开关"),
     "plate": ("盘", "碟"),
@@ -27,6 +29,7 @@ TARGET_NAMES = {
     "tomato": ("番茄", "西红柿", "砧板", "案板"),
 }
 TARGET_LABELS = {
+    "oil_bottle": "食用油瓶", "salt_shaker": "盐罐",
     "egg_bowl": "蛋碗", "stove_switch": "炉灶旋钮", "plate": "上菜盘",
     "pan": "平底锅", "tomato": "切番茄的砧板",
 }
@@ -50,6 +53,7 @@ S6_PHASES = {
 }
 
 ACTION_NAMES = {
+    "add_oil": "倒油", "add_salt": "撒盐",
     "cut_tomato": "切番茄",
     "beat_egg": "打鸡蛋",
     "turn_on_stove": "开火",
@@ -61,6 +65,9 @@ ACTION_NAMES = {
     "turn_off_stove": "关火",
 }
 REASON_TEXT = {
+    "oil_missing": "需要先往锅里倒油",
+    "oil_window": "只有开火后、炒蛋前可以倒油",
+    "salt_window": "只有熟蛋回锅后、合炒前可以撒盐",
     "stove_off": "炉灶还没打开",
     "previous_step": "上一步还没完成",
     "prep_incomplete": "备料还没完成",
@@ -80,14 +87,20 @@ def _step_text(snap: dict, events: list) -> str:
     stove_on = bool(snap.get("stove_on"))
     if step == "S6":
         phase = snap.get("finish_phase") or "return_cooked_egg"
+        if phase == "stir_fry" and snap.get("salt_added") is False:
+            return "可把盐罐拖到锅里撒盐，也可直接绕圈合炒。"
         return S6_PHASES.get(phase, UNKNOWN_STEP_TEXT)
     text = STEP_TEXTS.get(step)
     if text is None:
         return UNKNOWN_STEP_TEXT
     if isinstance(text, dict):
         text = text[stove_on]
+    if step == "S3" and stove_on and snap.get("oil_added") is False:
+        return "炉火已开启，先把油瓶拖到锅里倒油。"
     if step == "S4" and stove_on and _egg_already_fried(snap, events):
         text = S4_FRIED_TEXT
+    elif step == "S4" and stove_on and snap.get("oil_added") is False:
+        text = "先把食用油瓶拖到锅上倒油，再倒入蛋液。"
     return text
 
 
@@ -115,7 +128,7 @@ def _location_guidance(question: str, allowed: list) -> tuple[str, str]:
     target = matches[0]
     label = TARGET_LABELS[target]
     if target not in allowed:
-        return f"当前场景无法标记{label}。", ""
+        return f"当前场景无法标记{label}，可以询问其他已登记的道具。", ""
     return f"看金色圆圈，标出的位置就是{label}。", target
 
 
@@ -124,13 +137,18 @@ def offline_guidance(req: dict) -> dict:
     snap = req.get("snapshot") or {}
     events = req.get("recent_events") or []
     question = req.get("user_question") or ""
+    status = []
+    if req.get("recipe_version") != "1" and "油" in question and snap.get("oil_added") is not None:
+        status.append("本轮已倒油。" if snap["oil_added"] else "本轮还没倒油。")
+    if req.get("recipe_version") != "1" and "盐" in question and snap.get("salt_added") is not None:
+        status.append("本轮已撒盐。" if snap["salt_added"] else "本轮未撒盐，撒盐是可选的。")
     target = ""
     if snap.get("current_step") == "done":
-        text = DONE_TEXT
+        text = "".join(status) + DONE_TEXT
     elif any(word in question for word in ("在哪", "哪里", "哪儿", "哪边", "位置", "找不到")):
         text, target = _location_guidance(question, req.get("allowed_highlight_targets") or [])
     else:
-        text = _step_text(snap, events)
+        text = "".join(status) + _step_text(snap, events)
         if req.get("trigger") == "error":
             text = _error_sentence(events) + text
     return {

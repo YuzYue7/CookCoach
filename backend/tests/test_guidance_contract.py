@@ -47,6 +47,22 @@ def test_llm_success_echoes_ids(monkeypatch):
     assert body["guidance"]["highlight_target_id"] == "stove_switch"
 
 
+def test_model_receives_actual_seasoning_state(monkeypatch):
+    def capture(messages):
+        context = messages[-1]["content"]
+        assert "食用油：已加入" in context
+        assert "盐：未加入" in context
+        assert "stir_fry" in context
+        return GOOD_LLM, 1.0
+
+    monkeypatch.setattr(llm_client, "call_model", capture)
+    payload = dict(REQUEST, recipe_version="2", snapshot=dict(
+        REQUEST["snapshot"], current_step="S6", stove_on=True,
+        finish_phase="stir_fry", oil_added=True, salt_added=False))
+    body = client.post("/api/v1/guidance", json=payload).json()
+    assert body["source"] == "llm"
+
+
 def test_model_failure_uses_fallback(monkeypatch):
     def boom(messages):
         raise TimeoutError("model timeout")

@@ -52,9 +52,25 @@ namespace CookCoach.Checks
             TutorRequest Request() => JsonUtility.FromJson<TutorRequest>(Last("request").payload);
             tutor.mode=TutorMode.LocalPreview;
             stove.BeginRehearsal();
-            for(int i=0;i<5;i++) practice.TryStep(i);
+            for(int i=0;i<5;i++) { if(i==3) practice.TrySeason(TomatoEggLesson.Oil); practice.TryStep(i); }
             foreach(string action in TomatoEggLesson.FinishActions) practice.TryFinish(action);
             Expect(tutor.Journal.review.Contains("受阻操作 0 次，主动求助 0 次"),"clean six-step completion");
+            practice.Start();
+            practice.TrySeason(TomatoEggLesson.Oil);yield return Ready();
+            Expect(Request().recent_events.Last().reason=="oil_window" && !Request().snapshot.oil_added,"early oil rejected");
+            practice.TryStep(0);practice.TryStep(1);practice.TryStep(2);
+            practice.TryStep(3);yield return Ready();
+            Expect(Request().recent_events.Last().reason=="oil_missing" && !Request().snapshot.oil_added,"egg requires oil");
+            practice.TrySeason(TomatoEggLesson.Oil);practice.TrySeason(TomatoEggLesson.Oil);yield return Ready();
+            Expect(Request().recent_events.Last().reason=="already_done" && Request().snapshot.oil_added,"oil counted once");
+            practice.TryStep(3);practice.TryStep(4);
+            practice.TrySeason(TomatoEggLesson.Salt);yield return Ready();
+            Expect(Request().recent_events.Last().reason=="salt_window" && !Request().snapshot.salt_added,"salt waits for egg return");
+            practice.TryFinish(TomatoEggLesson.ReturnEgg);practice.TrySeason(TomatoEggLesson.Salt);
+            practice.TrySeason(TomatoEggLesson.Salt);yield return Ready();
+            Expect(Request().recent_events.Last().reason=="already_done" && Request().snapshot.salt_added,"salt counted once");
+            practice.Start();practice.TrySeason(TomatoEggLesson.Salt);yield return Ready();
+            Expect(!Request().snapshot.salt_added && !Request().snapshot.oil_added,"reset clears oil and salt");
             tutor.mode=TutorMode.Http; tutor.endpoint="http://127.0.0.1:18741/api/v1/guidance";
             practice.Start(); practice.TryStep(1);practice.TryStep(0);practice.TryStep(0);
             Expect(tutor.Journal.rows.Count(r=>r.kind=="action")==2,"either prep order and duplicate suppression");
@@ -69,8 +85,8 @@ namespace CookCoach.Checks
             string pointedBy=Last("reply").request_id;
             practice.TryStep(2); Expect(tutor.ActiveHighlight=="" && Last("action").previous_guidance_id==pointedBy,"correction linked to guidance and clears highlight");
             tutor.Ask("question","现在呢？");yield return Ready();
-            Expect(Request().snapshot.stove_on && tutor.LastMessage.Contains("蛋液"),"post-correction guidance");
-            practice.TryStep(3);practice.TryStep(4);
+            Expect(Request().snapshot.stove_on && !Request().snapshot.oil_added && tutor.LastMessage.Contains("油瓶"),"post-correction guidance");
+            practice.TrySeason(TomatoEggLesson.Oil);practice.TryStep(3);practice.TryStep(4);
             foreach(string action in TomatoEggLesson.FinishActions) practice.TryFinish(action);
             Expect(tutor.Journal.review.Contains("受阻操作 1 次，主动求助 2 次") && tutor.Journal.review.Contains("炉灶未开启"),"review from actual events");
             string file=tutor.ExportEvidence();var saved=JsonUtility.FromJson<TutorJournal>(File.ReadAllText(file));

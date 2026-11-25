@@ -12,7 +12,8 @@ namespace CookCoach.Tutoring
         readonly Camera camera;
         readonly Action<int> submit;
         readonly Action<string> finish;
-        readonly Transform platedEggs;
+        readonly Transform platedEggs, oilBottle, saltShaker;
+        readonly Action<string> season;
         bool mixing;
         string Phase => TomatoEggLesson.FinishPhase(state);
         readonly Transform knife, whole, yolks, parts, board, bowl;
@@ -23,15 +24,23 @@ namespace CookCoach.Tutoring
         KitchenSnapshot state;
         string session, carrying, pressedStation, selectedStation;
         GameObject heldFood;
+        Renderer[] seasoningRenderers;
+        bool seasoningOverPan;
+        static readonly Quaternion SeasoningTilt = Quaternion.Euler(104f, -60f, 0f);
+        // The opening of the skillet mesh, inside the rim (m).
+        const float PanLip = .065f, PanOpening = .164f;
+        public string SeasoningDropCue => !seasoningOverPan ? "" :
+            carrying == TomatoEggLesson.OilBottle ? "松手倒油" : "松手撒盐";
         bool equipped, stirring, hasAngle;
         int cuts;
         float lastCut=-10, angle, winding;
         string feedback;
         float feedbackUntil;
 
-        public CookingHands(KitchenWorkbench bench,Transform props,Transform pan,Camera camera,Action<int> submit,Action<string> finish)
+        public CookingHands(KitchenWorkbench bench,Transform props,Transform pan,Camera camera,Action<int> submit,Action<string> finish,Action<string> season)
         {
             this.bench=bench; this.pan=pan; this.camera=camera; this.submit=submit;this.finish=finish;platedEggs=props.Find("plate/Eggs");
+            this.season=season; oilBottle=bench.OilBottle; saltShaker=props.Find(TomatoEggLesson.SaltShaker);
             panFood=props.Find("Pan tomatoes");
             board=props.Find("tomato"); bowl=props.Find("egg_bowl");
             knife=board.Find("Paring knife"); whole=board.Find("Whole"); parts=board.Find("Pieces"); yolks=bowl.Find("Raw");
@@ -44,6 +53,8 @@ namespace CookCoach.Tutoring
         public string Status {
             get {
                 if(stirring) return (mixing?"锅中合炒　":"打蛋　")+Mathf.Min(100,Mathf.RoundToInt(Mathf.Abs(winding)/300f*100))+"%";
+                if(seasoningRenderers!=null)
+                    return seasoningOverPan ? SeasoningDropCue : "把鼠标移到锅口内";
                 if(carrying!=null) return carrying=="pan"?"移到盘子上松手装盘":"移到平底锅上松手下锅";
                 if(Time.unscaledTime<feedbackUntil) return feedback;
                 if(selectedStation=="plate") return "已选熟蛋　·　点锅让熟蛋回锅";
@@ -79,6 +90,7 @@ namespace CookCoach.Tutoring
             if(liftedSource!=null) liftedSource.SetActive(true);
             if(carrying=="pan") panFood.gameObject.SetActive(true);
             liftedSource=null;heldFood=null;carrying=null;feedbackUntil=0;
+            seasoningRenderers=null; seasoningOverPan=false;
         }
 
         void Tell(string text) {feedback=text;feedbackUntil=Time.unscaledTime+2.2f;}
@@ -95,6 +107,8 @@ namespace CookCoach.Tutoring
         public string Verb(string id)
         {
             if(state==null || state.current_step=="done") return "";
+            if(id==TomatoEggLesson.OilBottle) return state.oil_added?"本轮已倒油":"拖油瓶到锅上倒油";
+            if(id==TomatoEggLesson.SaltShaker) return state.salt_added?"本轮已撒盐":"拖盐罐到锅上撒盐";
             if(Phase!="") {
                 if(id=="plate" && Phase==TomatoEggLesson.ReturnEgg) return "拖熟蛋回锅";
                 if(id=="pan" && Phase==TomatoEggLesson.Mix) return "按住锅内绕圈合炒";
@@ -107,7 +121,7 @@ namespace CookCoach.Tutoring
                 case "tomato": return !Done(0)?(equipped?"切番茄":"先拿砧板旁的刀"):!Done(4)?"拖番茄块入锅":"";
                 case "egg_bowl": return !Done(1)?"按住碗边，绕圈打蛋":!Done(3)?"拖蛋液入锅":"";
                 case "stove_switch": return !Done(2)?"旋开炉火":"";
-                case "pan": return !Done(2)?"检查平底锅":!Done(3)?"从蛋碗拖入蛋液":"从砧板拖入番茄";
+                case "pan": return !Done(2)?"检查平底锅":!state.oil_added?"先把油瓶拖到锅上":!Done(3)?"从蛋碗拖入蛋液":"从砧板拖入番茄";
                 case "plate": return "装盘位置";
                 default:return "";
             }
@@ -135,7 +149,14 @@ namespace CookCoach.Tutoring
                 MoveFood(screen);
                 if(input!=HandInput.Release) return;
                 string source=carrying;
+                bool isSeasoning = seasoningRenderers!=null;
+                bool overOpening = seasoningOverPan;
                 CancelGesture();
+                if(isSeasoning) {
+                    if(overOpening) season(source==TomatoEggLesson.OilBottle?TomatoEggLesson.Oil:TomatoEggLesson.Salt);
+                    else Tell("瓶罐已放回原位。请移到锅口内再松手。");
+                    return;
+                }
                 if((source=="pan" || source=="tomato" || source=="egg_bowl") && id=="plate") finish(TomatoEggLesson.Serve);
                 else if(source=="cooked_eggs" && id=="pan") finish(TomatoEggLesson.ReturnEgg);
                 else if(id=="pan" && (source=="egg_bowl" || source=="tomato")) submit(source=="egg_bowl"?3:4);
@@ -148,6 +169,11 @@ namespace CookCoach.Tutoring
                 return;
             }
             if(input!=HandInput.Press) return;
+            if(id==TomatoEggLesson.OilBottle || id==TomatoEggLesson.SaltShaker) {
+                CancelGesture();
+                Lift(id,id==TomatoEggLesson.OilBottle?oilBottle:saltShaker,screen);
+                return;
+            }
             if(Phase!="") {
                 if(selectedStation=="plate" && id=="pan" || selectedStation=="pan" && id=="plate") {
                     string action=selectedStation=="plate"?TomatoEggLesson.ReturnEgg:TomatoEggLesson.Serve;
@@ -215,12 +241,18 @@ namespace CookCoach.Tutoring
             liftedSource.SetActive(false);
             if(id=="pan") panFood.gameObject.SetActive(false);
             heldFood.SetActive(true);
+            if(id==TomatoEggLesson.OilBottle || id==TomatoEggLesson.SaltShaker)
+                seasoningRenderers=heldFood.GetComponentsInChildren<Renderer>();
             MoveFood(screen);
         }
 
         void MoveFood(Vector2 screen)
         {
             var ray=camera.ScreenPointToRay(screen);
+            if(seasoningRenderers!=null) {
+                MoveSeasoning(ray);
+                return;
+            }
             var plane=new Plane(Vector3.up,new Vector3(0,1.38f,0));
             if(plane.Raycast(ray,out float distance) && distance<3f)
                 {
@@ -228,6 +260,42 @@ namespace CookCoach.Tutoring
                     float tilt=carrying=="egg_bowl"?-22f:carrying=="pan"?-12f:0f;
                     heldFood.transform.rotation=Quaternion.AngleAxis(tilt,camera.transform.forward)*liftedSource.transform.rotation;
                 }
+        }
+
+        void MoveSeasoning(Ray ray)
+        {
+            Vector3 opening = pan.TransformPoint(Vector3.up * PanLip);
+            var openingPlane = new Plane(pan.up, opening);
+            seasoningOverPan = false;
+            if(!openingPlane.Raycast(ray, out float distance) || distance>2.4f) {
+                heldFood.SetActive(false);
+                return;
+            }
+
+            Vector3 aim = ray.GetPoint(distance);
+            Vector3 local = pan.InverseTransformPoint(aim);
+            seasoningOverPan = new Vector2(local.x,local.z).sqrMagnitude <= PanOpening*PanOpening
+                && distance <= 1.95f;
+
+            heldFood.SetActive(true);
+            var held = heldFood.transform;
+            Vector3 spout = carrying==TomatoEggLesson.OilBottle ? bench.OilSpout : Vector3.up*.10f;
+            held.rotation = SeasoningTilt;
+            held.position = aim + Vector3.up*.12f - held.TransformVector(spout);
+
+            // Keep the whole tilted prop in front of the backsplash and above the hob.
+            // The spout is over the opening in the valid zone, where horizontal clamping is unnecessary.
+            Bounds prop = seasoningRenderers[0].bounds;
+            foreach (var renderer in seasoningRenderers) prop.Encapsulate(renderer.bounds);
+            float rise = Mathf.Max(0, opening.y+.075f-prop.min.y);
+            if(seasoningOverPan) {
+                held.position += Vector3.up*rise;
+                return;
+            }
+            Vector3 center = prop.center;
+            float x = Mathf.Clamp(center.x, -2.58f + prop.extents.x, -.37f - prop.extents.x);
+            float z = Mathf.Clamp(center.z, 1.55f + prop.extents.z, 2.55f - prop.extents.z);
+            held.position += new Vector3(x-center.x, rise, z-center.z);
         }
     }
 }

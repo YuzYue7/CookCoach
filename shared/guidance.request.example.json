@@ -2,7 +2,7 @@
   "request_id": "933f754836d3405dabe9caa08c5a0943",
   "session_id": "f43d1f727d304993b036cd08730dfb5e",
   "recipe_id": "tomato_egg",
-  "recipe_version": "1",
+  "recipe_version": "2",
   "trigger": "question",
   "user_question": "开关在哪里？",
   "state_version": 3,
@@ -12,6 +12,8 @@
       "S2"
     ],
     "stove_on": false,
+    "oil_added": false,
+    "salt_added": false,
     "related_error_count": 1,
     "current_step": "S3",
     "current_step_title": "开启炉灶",
