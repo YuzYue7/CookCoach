@@ -1,4 +1,8 @@
-"""fallback 规则表测试：模型不可用时的备用提示分支。"""
+"""fallback 规则表测试：模型不可用时的备用提示分支。
+
+决策顺序：先看 current_step（句二「现在该做什么」），
+再看最近一条受阻事件（句一「刚才为什么没执行」）。
+"""
 from app.schemas import Event, GuidanceRequest, Snapshot
 from app.services import fallback
 
@@ -30,11 +34,53 @@ def test_stove_off_question_highlights_switch():
     assert "旋钮" in g["message"]
 
 
-def test_stove_on_gives_pour_hint():
+def test_stove_on_s4_pours_egg():
+    # S4 火开且鸡蛋未炒 → 倒蛋液
     req = _req(snapshot=Snapshot(stove_on=True, current_step="S4"))
     g = fallback.fallback_guidance(req)
     assert "蛋液" in g["message"]
     assert g["highlight_target_id"] == ""
+
+
+def test_stove_on_s5_pours_tomato_not_egg():
+    # 核心回归：S5 火开（鸡蛋已炒完）→ 提示倒番茄，绝不能提示倒蛋液
+    req = _req(
+        snapshot=Snapshot(
+            stove_on=True, current_step="S5",
+            completed_steps=["S1", "S2", "S3", "S4"],
+        )
+    )
+    g = fallback.fallback_guidance(req)
+    assert "番茄" in g["message"]
+    assert "蛋液" not in g["message"]
+
+
+def test_s4_egg_already_fried_moves_on_to_tomato():
+    # S4 但最近 fry_egg 已成功（或 completed_steps 已含 S4）→ 不再提示倒蛋液
+    for snap, events in (
+        (Snapshot(stove_on=True, current_step="S4"),
+         [Event(action_id="fry_egg", target_id="pan", outcome="ok")]),
+        (Snapshot(stove_on=True, current_step="S4",
+                  completed_steps=["S1", "S2", "S3", "S4"]),
+         []),
+    ):
+        g = fallback.fallback_guidance(_req(snapshot=snap, recent_events=events))
+        assert "蛋液" not in g["message"]
+        assert "番茄" in g["message"]
+
+
+def test_s2_stove_early_on_still_beats_egg():
+    # 提前开火不改变当前步骤的提示：S2 → 打鸡蛋
+    req = _req(snapshot=Snapshot(stove_on=True, current_step="S2"))
+    g = fallback.fallback_guidance(req)
+    assert "鸡蛋" in g["message"]
+    assert "蛋液" not in g["message"]
+
+
+def test_stove_off_s3_says_turn_on():
+    req = _req(snapshot=Snapshot(stove_on=False, current_step="S3"))
+    g = fallback.fallback_guidance(req)
+    assert "开火" in g["message"]
 
 
 def test_s6_phases():
@@ -54,17 +100,46 @@ def test_s6_phases():
         assert g["message"].strip()
 
 
-def test_error_trigger_prepends_blocked_action():
+def test_done_step_greets():
+    req = _req(snapshot=Snapshot(current_step="done"))
+    g = fallback.fallback_guidance(req)
+    assert g["message"].strip()
+
+
+def test_unknown_step_safe_text():
+    req = _req(snapshot=Snapshot(current_step="S9", stove_on=True))
+    g = fallback.fallback_guidance(req)
+    assert g["message"].strip()
+    assert "蛋液" not in g["message"]
+
+
+def test_error_trigger_two_sentences_with_reason():
+    # 句一：刚才的操作为什么没执行（结合 reason）；句二：现在该做什么
+    req = _req(
+        trigger="error",
+        snapshot=Snapshot(current_step="S3", stove_on=False),
+        recent_events=[
+            Event(action_id="fry_egg", target_id="pan",
+                  outcome="blocked", reason="stove_off")
+        ],
+    )
+    g = fallback.fallback_guidance(req)
+    assert g["message"].startswith("刚才炒蛋没执行：炉灶还没打开。")
+    assert "开火" in g["message"]
+
+
+def test_error_trigger_previous_step_reason():
     req = _req(
         trigger="error",
         snapshot=Snapshot(current_step="S6", finish_phase="turn_off_stove"),
         recent_events=[
             Event(action_id="turn_off_stove", target_id="stove_switch",
-                  outcome="blocked", reason="stove_on")
+                  outcome="blocked", reason="previous_step")
         ],
     )
     g = fallback.fallback_guidance(req)
-    assert g["message"].startswith("关火未执行。")
+    assert g["message"].startswith("刚才关火没执行：上一步还没完成。")
+    assert "关火" in g["message"]
 
 
 def test_already_done_reason():
@@ -77,4 +152,19 @@ def test_already_done_reason():
         ],
     )
     g = fallback.fallback_guidance(req)
-    assert g["message"].startswith("装盘已经完成。")
+    assert g["message"].startswith("刚才装盘已经完成，不用重复。")
+    assert "空盘" in g["message"]
+
+
+def test_question_trigger_has_no_error_prefix():
+    # 非 error 触发即使最近有受阻事件，也不拼句一
+    req = _req(
+        trigger="question",
+        snapshot=Snapshot(current_step="S3", stove_on=False),
+        recent_events=[
+            Event(action_id="fry_egg", target_id="pan",
+                  outcome="blocked", reason="stove_off")
+        ],
+    )
+    g = fallback.fallback_guidance(req)
+    assert not g["message"].startswith("刚才")
