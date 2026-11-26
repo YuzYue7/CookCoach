@@ -8,6 +8,7 @@ import datetime
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.logging_util import log_dir
@@ -73,11 +74,32 @@ def test_model_failure_uses_fallback(monkeypatch):
     assert body["source"] == "fallback"
 
 
-def test_unparseable_output_uses_fallback(monkeypatch):
-    monkeypatch.setattr(llm_client, "call_model", lambda messages: ("not-json", 1.0))
+@pytest.mark.parametrize("raw", ["not-json", '{"message":null}', '{"message":{}}', '{"message":42}'])
+def test_unparseable_output_uses_fallback(monkeypatch, raw):
+    monkeypatch.setattr(llm_client, "call_model", lambda messages: (raw, 1.0))
     body = _post().json()
     _assert_contract(body)
     assert body["source"] == "fallback"
+
+
+@pytest.mark.parametrize("step,question,allowed,target", [
+    ("S6", "", ["plate", "egg_bowl"], "plate"),
+    ("S6", "", ["egg_bowl"], ""),
+    ("S6", "蛋碗在哪里？", ["egg_bowl", "plate"], "egg_bowl"),
+    ("done", "蛋碗在哪里？", ["egg_bowl", "plate"], ""),
+])
+def test_empty_bowl_is_not_the_cooked_egg_marker(monkeypatch, step, question, allowed, target):
+    message = "金色标记是蛋碗。" if question else "现在把熟鸡蛋拖回锅里。"
+    raw = json.dumps(dict(message=message, hint_level="direct", highlight_target_id="egg_bowl"))
+    monkeypatch.setattr(llm_client, "call_model", lambda messages: (raw, 1.0))
+    payload = dict(REQUEST, user_question=question, trigger="question" if question else "error",
+                   snapshot=dict(REQUEST["snapshot"], current_step=step, finish_phase="return_cooked_egg"),
+                   allowed_highlight_targets=allowed)
+    answer = client.post("/api/v1/guidance", json=payload).json()["guidance"]
+    assert answer["highlight_target_id"] == target
+    assert answer["hint_level"] == ("direct" if target else "check")
+    if not target:
+        assert "金色标记" not in answer["message"]
 
 
 def test_highlight_clamped_to_allowed(monkeypatch):

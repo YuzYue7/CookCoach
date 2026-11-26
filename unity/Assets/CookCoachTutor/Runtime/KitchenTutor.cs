@@ -1,3 +1,6 @@
+#if UNITY_6000_0_OR_NEWER && ENABLE_LEGACY_INPUT_MANAGER && (UNITY_EDITOR_WIN || (UNITY_STANDALONE_WIN && !UNITY_EDITOR))
+#define WINDOWS_TUTOR_IME
+#endif
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -52,6 +55,13 @@ namespace CookCoach.Tutoring
         string latestId, lastQuestion, lastTrigger, lastDeliveredId;
         bool expanded;
         Font uiFont;
+#if WINDOWS_TUTOR_IME
+        readonly StringBuilder committedCharacters = new();
+        string compositionPreview = "";
+        string draftBeforeCommit;
+        int commitStart, commitEnd;
+        int commitFrame = -1;
+#endif
         static void Show(VisualElement element, bool on) =>
             element.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
 
@@ -91,11 +101,11 @@ namespace CookCoach.Tutoring
             tip.clicked += () => Ask("hint","");
             locate.clicked += () => Ask("question","开关在哪里？");
             retry.clicked += Retry;
-            question.RegisterCallback<KeyDownEvent>(e => {
-                if(e.keyCode==KeyCode.Return && !IsWaiting && !ComposingText()) {
-                    SubmitTyped(); e.StopPropagation();
-                }
-            });
+#if WINDOWS_TUTOR_IME
+            question.RegisterCallback<InputEvent>(_ => compositionPreview=Input.compositionString ?? "");
+            question.RegisterCallback<FocusOutEvent>(_ => compositionPreview="");
+#endif
+            question.RegisterCallback<KeyDownEvent>(OnQuestionKey, TrickleDown.TrickleDown);
             root.Q<Button>("fold").clicked+=()=>SetExpanded(false);
             root.Q<Button>("expand").clicked+=()=>SetExpanded(true);
             root.Q<Button>("logButton").clicked+=()=>Show(log,log.resolvedStyle.display==DisplayStyle.None);
@@ -165,6 +175,10 @@ namespace CookCoach.Tutoring
             Journal.Add(context,"state",context.snapshot.current_step_title,JsonUtility.ToJson(context.snapshot));
             if(message!=null) {
                 message.text=fresh?"练习已开始。需要帮助时，可以问我。":"当前步骤 · "+context.snapshot.current_step_title;
+#if WINDOWS_TUTOR_IME
+                committedCharacters.Clear();
+                compositionPreview="";
+#endif
                 question.SetValueWithoutNotify(""); Show(retry,false);
                 if(fresh) { SetAsking(false); SetExpanded(startExpanded); }
             }
@@ -321,7 +335,79 @@ namespace CookCoach.Tutoring
             targetName.text=t.title; marker.style.left=coord.x-13;marker.style.top=coord.y-13;
         }
 
-        void SubmitTyped(){var text=question.value?.Trim(); if(string.IsNullOrEmpty(text)) {question.Focus();return;} Ask("question",text);}
+        void SubmitTyped()
+        {
+#if WINDOWS_TUTOR_IME
+            // A click can move focus to Send before the panel has replayed the committed word.
+            if (committedCharacters.Length>0) ApplyCommittedDraft();
+#endif
+            var text=question.value?.Trim();
+            if(string.IsNullOrEmpty(text)) {question.Focus();return;}
+            Ask("question",text);
+        }
+        void OnQuestionKey(KeyDownEvent e)
+        {
+#if WINDOWS_TUTOR_IME
+            // Windows can deliver a whole candidate before UI Toolkit removes its pinyin preview.
+            // Let that removal restore the selection, then insert through the normal text editor.
+            if ((compositionPreview.Length>0 || committedCharacters.Length>0) && !ComposingText() &&
+                e.keyCode==KeyCode.None && !char.IsControl(e.character) && !e.actionKey) {
+                if (committedCharacters.Length==0) {
+                    draftBeforeCommit=question.text;
+                    commitEnd=Mathf.Clamp(question.cursorIndex,0,draftBeforeCommit.Length);
+                    // At the field's limit only the beginning of the pinyin may be visible.
+                    int length=Math.Min(commitEnd,compositionPreview.Length);
+                    while (length>0 && string.CompareOrdinal(draftBeforeCommit,commitEnd-length,compositionPreview,0,length)!=0)
+                        length--;
+                    commitStart=commitEnd-length;
+                    question.schedule.Execute(InsertCommittedCharacters);
+                }
+                commitFrame=Time.frameCount;
+                committedCharacters.Append(e.character);
+                e.StopImmediatePropagation();
+                return;
+            }
+            if (commitFrame==Time.frameCount || compositionPreview.Length>0) return;
+#endif
+            if ((e.keyCode==KeyCode.Return || e.keyCode==KeyCode.KeypadEnter) && !IsWaiting && !ComposingText()) {
+                e.StopImmediatePropagation();
+                SubmitTyped();
+            }
+        }
+#if WINDOWS_TUTOR_IME
+        void ApplyCommittedDraft()
+        {
+            int room=question.maxLength<0 ? committedCharacters.Length :
+                Math.Max(0,question.maxLength-(draftBeforeCommit.Length-(commitEnd-commitStart)));
+            int count=Math.Min(room,committedCharacters.Length);
+            if (count>0 && count<committedCharacters.Length && char.IsHighSurrogate(committedCharacters[count-1])) count--;
+            string word=committedCharacters.ToString(0,count);
+            committedCharacters.Clear();
+            compositionPreview="";
+            question.value=draftBeforeCommit.Remove(commitStart,commitEnd-commitStart).Insert(commitStart,word);
+            question.SelectRange(commitStart+word.Length,commitStart+word.Length);
+        }
+
+        void InsertCommittedCharacters()
+        {
+            if (committedCharacters.Length==0) return;
+            if (question.enabledInHierarchy && question.focusController?.focusedElement!=question &&
+                asking && expanded) {
+                ApplyCommittedDraft();
+                return;
+            }
+            string text=committedCharacters.ToString();
+            committedCharacters.Clear();
+            compositionPreview="";
+            if (!asking || !expanded || !question.enabledInHierarchy) return;
+            var editor=(TextElement)question.textSelection;
+            foreach (char character in text) {
+                using var key=KeyDownEvent.GetPooled(character, KeyCode.None, EventModifiers.None);
+                key.target=editor;
+                editor.SendEvent(key);
+            }
+        }
+#endif
         static bool ComposingText()
         {
 #if ENABLE_LEGACY_INPUT_MANAGER

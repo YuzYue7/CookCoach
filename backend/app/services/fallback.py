@@ -25,7 +25,7 @@ TARGET_NAMES = {
     "egg_bowl": ("蛋碗", "碗", "打蛋盆"),
     "stove_switch": ("旋钮", "炉灶", "开关", "灶台开关"),
     "plate": ("盘", "碟"),
-    "pan": ("锅",),
+    "pan": ("锅", "合炒", "翻炒"),
     "tomato": ("番茄", "西红柿", "砧板", "案板"),
 }
 TARGET_LABELS = {
@@ -120,12 +120,18 @@ def _error_sentence(events) -> str:
     return f"刚才{name}没执行：{reason}。" if reason else f"刚才{name}没执行。"
 
 
-def _location_guidance(question: str, allowed: list) -> tuple[str, str]:
-    matches = [target for target, names in TARGET_NAMES.items()
-               if any(name in question for name in names)]
+def _location_guidance(question: str, allowed: list, snap: dict) -> tuple[str, str]:
+    matches = {target for target, names in TARGET_NAMES.items()
+               if any(name in question for name in names)}
+    if "熟鸡蛋" in question or "熟蛋" in question:
+        if snap.get("current_step") == "S5":
+            matches.add("plate")
+        elif snap.get("current_step") == "S6":
+            phase = snap.get("finish_phase") or "return_cooked_egg"
+            matches.add("plate" if phase == "return_cooked_egg" else "pan")
     if len(matches) != 1:
         return "你想找哪件道具？可以直接问我蛋碗、砧板、锅、盘子或炉灶旋钮的位置。", ""
-    target = matches[0]
+    target = matches.pop()
     label = TARGET_LABELS[target]
     if target not in allowed:
         return f"当前场景无法标记{label}，可以询问其他已登记的道具。", ""
@@ -146,7 +152,7 @@ def offline_guidance(req: dict) -> dict:
     if snap.get("current_step") == "done":
         text = "".join(status) + DONE_TEXT
     elif any(word in question for word in ("在哪", "哪里", "哪儿", "哪边", "位置", "找不到")):
-        text, target = _location_guidance(question, req.get("allowed_highlight_targets") or [])
+        text, target = _location_guidance(question, req.get("allowed_highlight_targets") or [], snap)
     else:
         text = "".join(status) + _step_text(snap, events)
         if req.get("trigger") == "error":

@@ -115,6 +115,8 @@ def test_finished_lesson_returns_review_without_highlight(question):
 @pytest.mark.parametrize("step,question,allowed,target,word", [
     ("S2", "蛋碗在哪里？", ["egg_bowl", "stove_switch"], "egg_bowl", "蛋碗"),
     ("S6", "平底锅在哪儿？", ["pan", "plate"], "pan", "平底锅"),
+    ("S6", "在哪里合炒？", ["pan", "plate"], "pan", "平底锅"),
+    ("S6", "熟鸡蛋在哪里？", ["pan", "plate", "egg_bowl"], "plate", "上菜盘"),
     ("S2", "找不到蛋碗", ["stove_switch"], "", "无法标记"),
     ("S2", "计时器在哪里？", ["stove_switch", "pan"], "", "哪件道具"),
     ("S3", "锅和开关在哪里？", ["stove_switch", "pan"], "", "哪件道具"),

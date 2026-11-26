@@ -25,7 +25,7 @@ def create_guidance(req: GuidanceRequest) -> GuidanceResponse:
     try:
         raw_output, model_latency_ms = llm_client.call_model(messages)
         parsed = validate.parse_model_output(raw_output)
-        guidance_dict, issues = validate.clamp_guidance(parsed, req.allowed_highlight_targets)
+        guidance_dict, issues = validate.clamp_guidance(parsed, req)
         source = "llm"
         validation_report = {"ok": True, "issues": issues}
     except Exception as exc:

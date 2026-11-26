@@ -13,7 +13,7 @@ Label { margin:0; padding:0; }
 .topButton,.expand {position:absolute; padding:8px 14px; font-size:14px; border-width:1px; border-color:#88958a;}
 .topButton {top:22px; right:24px;} .expand {bottom:22px;left:24px;}
 .topButton:hover,.expand:hover {background-color:#38574b;}
-#card {position:absolute;bottom:22px;left:24px;width:366px;max-width:54%;padding:15px 18px 14px;background-color:#fff6e5;border-width:1px;border-color:#c4b59c;border-top-width:3px;border-top-color:#bd5a3d;border-radius:16px;}
+#card {position:absolute;bottom:22px;left:24px;width:378px;max-width:92%;padding:15px 18px 14px;background-color:#fff6e5;border-width:1px;border-color:#c4b59c;border-top-width:3px;border-top-color:#bd5a3d;border-radius:16px;}
 .head {padding-bottom:9px;border-bottom-width:1px;border-bottom-color:#dfd3bc;}
 #emblem {width:44px;height:44px;background-color:#e7ecd9;border-radius:22px;margin-right:11px;flex-shrink:0;}
 .title {font-size:21px;color:#203e33;-unity-font-style:bold;} .origin {font-size:12px;color:#586b5c;}
@@ -23,8 +23,10 @@ Label { margin:0; padding:0; }
 .suggestions {margin-top:6px;margin-bottom:11px;}
 .chip {border-width:1px;border-color:#c8ccb8;border-radius:11px;background-color:#edf0e0;padding:3px 9px;color:#335744;font-size:13px;margin-right:6px;}
 .chip:hover {background-color:#dae7cf;} .chip:disabled {opacity:.48;}
-.compose {height:36px;} #question {flex-grow:1;min-width:0;margin:0;margin-right:7px;}
-#question .unity-text-field__input {height:36px;margin:0;padding-left:10px;background-color:#fffaf0;color:#273e33;border-width:1px;border-color:#b7bba7;border-radius:7px;font-size:15px;}
+.compose {height:36px; min-width:0;}
+#question {flex-basis:0; flex-grow:1; flex-shrink:1; min-width:0; margin:0; margin-right:7px;}
+#question .unity-text-field__input {min-width:0; overflow:hidden; height:36px;margin:0;padding-left:10px;background-color:#fffaf0;color:#273e33;border-width:1px;border-color:#b7bba7;border-radius:7px;font-size:15px;}
+#send {flex-shrink:0;}
 .primary {height:36px;width:56px;background-color:#a94732;color:#fffaf0;border-radius:8px;font-size:15px;}
 .primary:hover {background-color:#873a29;} .primary:disabled {opacity:.5;}
 #beacon {position:absolute;flex-direction:row;align-items:center;} #ring {width:26px;height:26px;border-width:3px;border-color:#ffcf79;border-radius:13px;background-color:rgba(60,44,20,.4);}
@@ -42,7 +44,7 @@ Label { margin:0; padding:0; }
 #reviewText,#exportStatus {white-space:normal;color:#fff3d9;font-size:15px;}
 #export {margin-top:8px;align-self:flex-start;}
 #exportStatus {font-size:12px;}
-#card { width:378px; border-top-width:1px; border-top-color:#c4b59c; border-left-width:4px; border-left-color:#a8583d; }
+#card { border-top-width:1px; border-top-color:#c4b59c; border-left-width:4px; border-left-color:#a8583d; }
 .head { border-bottom-width:0; padding-bottom:0; flex-wrap:wrap; }
 .title {font-size:18px;}
 .origin {margin-left:8px;font-size:12px;}
